@@ -180,6 +180,38 @@ final class ProviderTests: XCTestCase {
         XCTAssertEqual(tokens, ["Bearer personal", "Bearer team"])
     }
 
+    func testClaudeAccountComesFromTheCredentialWhenTheProfileIsAnotherOrganization() {
+        // The desktop app's sessions rewrite ~/.claude.json with their own
+        // organization while the keychain still holds the team login.
+        let keychain = MemoryKeychain(currentUser: [
+            "Claude Code-credentials": encodedJSON(ClaudeCredentialsDocument(
+                claudeAiOauth: ClaudeOAuth(
+                    accessToken: "team",
+                    subscriptionType: "team",
+                    accountUuid: "a",
+                    organizationUuid: "team-org"
+                )
+            ))
+        ])
+        let files = MemoryFiles([
+            "~/.claude.json": """
+            {"oauthAccount": {"accountUuid": "a", "organizationUuid": "personal-org",
+             "emailAddress": "me@example.com", "organizationName": "me@example.com's Organization"}}
+            """
+        ])
+        let store = ClaudeAuthStore(
+            environment: MockEnvironment(),
+            files: files,
+            keychain: keychain,
+            dateProvider: FixedDateProvider(value: Date())
+        )
+
+        let account = store.account()
+
+        XCTAssertEqual(account?.key, "a/team-org")
+        XCTAssertEqual(account?.displayName, "Claude Team")
+    }
+
     func testCodexProactiveRefreshUsesExactSourceAndFormEncoding() async throws {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let auth = CodexAuth(
