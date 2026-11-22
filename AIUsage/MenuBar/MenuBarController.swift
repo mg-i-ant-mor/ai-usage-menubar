@@ -484,6 +484,16 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
                     displayMode: preferences.usageDisplayMode,
                     workSchedule: preferences.activeWorkSchedule
                 ),
+                // The tooltip lists every account, even those the bar hides.
+                tooltipGroups: store.menuBarProviderReadings(
+                    for: preferences.menuBarProviderConfigurations.map {
+                        var all = $0
+                        all.accountIDs = Set(store.states[$0.provider]?.accounts.map(\.id) ?? [])
+                        return all
+                    },
+                    displayMode: preferences.usageDisplayMode,
+                    workSchedule: preferences.activeWorkSchedule
+                ),
                 trackedProviders: preferences.trackedProviderIDs,
                 refreshInterval: preferences.refreshInterval
             )
@@ -495,16 +505,19 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
 
         store.setTrackedProviders(state.trackedProviders)
         store.setRefreshInterval(state.refreshInterval)
-        updateStatusItem(with: state.groups)
+        updateStatusItem(with: state.groups, tooltipGroups: state.tooltipGroups)
     }
 
-    private func updateStatusItem(with groups: [MenuBarProviderReadings]) {
+    private func updateStatusItem(
+        with groups: [MenuBarProviderReadings],
+        tooltipGroups: [MenuBarProviderReadings]
+    ) {
         guard let button = statusItem?.button else { return }
 
         let collectionPresentation = MenuBarReadingsPresentation(
             groups: groups
         )
-        button.toolTip = MenuBarTooltip.text(for: groups, now: Date())
+        button.toolTip = MenuBarTooltip.text(for: tooltipGroups, now: Date())
         button.setAccessibilityLabel(collectionPresentation.accessibilityLabel)
 
         guard !groups.isEmpty else {

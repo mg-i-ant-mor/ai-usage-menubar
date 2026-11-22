@@ -77,7 +77,7 @@ enum MenuBarTooltip {
                 : group.readings.flatMap {
                     lines(for: $0, now: now, calendar: calendar, locale: locale)
                 }
-            return ([group.provider.displayName] + lines).joined(separator: "\n")
+            return ([group.title] + lines).joined(separator: "\n")
         }.joined(separator: "\n\n")
     }
 
@@ -161,7 +161,7 @@ struct MenuBarReadingsPresentation: Equatable, Sendable {
         }
         accessibilityLabel = groups.map { group in
             if group.readings.isEmpty {
-                return "\(group.provider.displayName), no usage data"
+                return "\(group.title), no usage data"
             }
             return group.readings
                 .map(MenuBarPresentation.init(reading:))

@@ -70,6 +70,17 @@ your tools already have, so there is nothing to set up.
 Only tools installed on your Mac get a card. A tool that's signed out stays
 visible and tells you what to do.
 
+**More than one Claude account?** Sign the second one in to Claude Code with its
+own config directory, named `~/.claude-<something>`:
+
+```bash
+CLAUDE_CONFIG_DIR=~/.claude-work claude
+```
+
+Each account then gets its own card, labeled with its organization or email.
+In Settings, tick which accounts the menu bar shows, one or both; with none
+ticked it shows the default login.
+
 ## Choose what the menu bar shows
 
 <p align="center">
