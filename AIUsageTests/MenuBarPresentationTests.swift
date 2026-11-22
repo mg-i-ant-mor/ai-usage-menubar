@@ -87,6 +87,10 @@ final class MenuBarPresentationTests: XCTestCase {
                         resetsAt: t0.addingTimeInterval(4 * 86_400)
                     ),
                     MenuBarReading(
+                        provider: .claude, metric: .totalUsage, value: .percentage(93),
+                        displayMode: .used, isStale: false
+                    ),
+                    MenuBarReading(
                         provider: .claude, metric: .resets, value: .resets(available: 3),
                         displayMode: .used, isStale: false
                     )
@@ -117,6 +121,7 @@ final class MenuBarPresentationTests: XCTestCase {
               Full by 09:20 at this pace · Resets 11:00
         🟢 Weekly — 37% used
               Resets Tue 08:00
+        🔴 Total Usage — 93% used
         🔄 Resets — 3 available
 
         Codex
