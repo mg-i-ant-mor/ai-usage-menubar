@@ -193,6 +193,52 @@ final class UsageStoreTests: XCTestCase {
         )
     }
 
+    func testMenuBarShowsTheChosenClaudeAccounts() async {
+        var primary = ProviderSnapshot(
+            provider: .claude,
+            planName: "Team",
+            windows: [QuotaWindow(kind: .weekly, usedPercent: 70, resetsAt: nil)],
+            fetchedAt: Date()
+        )
+        primary.accountName = "Acme"
+        primary.otherAccounts = [ProviderAccount(
+            id: "/Users/me/.claude-personale",
+            name: "me@example.com",
+            snapshot: ProviderSnapshot(
+                provider: .claude,
+                planName: "Pro",
+                windows: [QuotaWindow(kind: .weekly, usedPercent: 8, resetsAt: nil)],
+                fetchedAt: Date()
+            )
+        )]
+        let store = UsageStore(
+            providers: [SequencedProvider(id: .claude, results: [.success(primary)])],
+            availabilityChecker: FixedProviderAvailabilityChecker(installed: [.claude])
+        )
+        await store.refresh()
+
+        func groups(_ accounts: Set<String>) -> [MenuBarProviderReadings] {
+            store.menuBarProviderReadings(for: [MenuBarProviderConfiguration(
+                provider: .claude,
+                metrics: [.weekly],
+                accountIDs: accounts
+            )])
+        }
+
+        let both = groups(["claude", "/Users/me/.claude-personale"])
+        XCTAssertEqual(both.map(\.title), [
+            "Claude Code · Acme",
+            "Claude Code · me@example.com"
+        ])
+        XCTAssertEqual(both.flatMap(\.readings).map(\.value), [.percentage(70), .percentage(8)])
+        XCTAssertEqual(
+            groups(["/Users/me/.claude-personale"]).flatMap(\.readings).map(\.value),
+            [.percentage(8)]
+        )
+        // Nothing chosen for this provider: the default login stays visible.
+        XCTAssertEqual(groups([]).flatMap(\.readings).map(\.value), [.percentage(70)])
+    }
+
     func testProviderGroupFallsBackToDefaultMetricWhenSelectionIsMissing() async {
         // Some Claude accounts have no five-hour window: the API returns
         // `five_hour: null`, so a saved "session" selection yields nothing.

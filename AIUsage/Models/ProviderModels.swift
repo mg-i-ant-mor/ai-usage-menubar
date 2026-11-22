@@ -334,6 +334,8 @@ struct MenuBarProviderConfiguration:
 {
     let provider: ProviderID
     let metrics: [MenuBarMetricID]
+    /// Accounts to show; the default login when none of them exists.
+    var accountIDs: Set<String> = []
 
     var id: ProviderID { provider }
 }
@@ -487,6 +489,9 @@ struct ProviderSnapshot: Equatable, Sendable {
     let billingUsage: BillingUsage?
     let resets: UsageResets?
     let fetchedAt: Date
+    /// Set only when the provider found more than one account.
+    var accountName: String?
+    var otherAccounts: [ProviderAccount] = []
 
     init(
         provider: ProviderID,
@@ -623,6 +628,22 @@ struct ProviderFailure: LocalizedError, Equatable, Sendable {
     }
 }
 
+/// Another login for the same provider, such as a second Claude account
+/// kept in its own `CLAUDE_CONFIG_DIR`.
+struct ProviderAccount: Equatable, Identifiable, Sendable {
+    let id: String
+    let name: String
+    var snapshot: ProviderSnapshot?
+    var failure: ProviderFailure?
+}
+
+/// One account's state, as the menu bar and Settings list them.
+struct ProviderAccountState: Identifiable {
+    let id: String
+    let name: String?
+    let state: ProviderState
+}
+
 struct ProviderState: Equatable, Sendable {
     let provider: ProviderID
     var snapshot: ProviderSnapshot?
@@ -631,6 +652,21 @@ struct ProviderState: Equatable, Sendable {
     var isToolInstalled: Bool?
 
     var isStale: Bool { snapshot != nil && failure != nil }
+
+    /// The default login, whose id is the provider's raw value, then the
+    /// other accounts it found.
+    var accounts: [ProviderAccountState] {
+        let primary = ProviderAccountState(
+            id: provider.rawValue,
+            name: snapshot?.accountName,
+            state: self
+        )
+        return [primary] + (snapshot?.otherAccounts ?? []).map {
+            var state = ProviderState(provider: provider, snapshot: $0.snapshot, failure: $0.failure)
+            state.isToolInstalled = isToolInstalled
+            return ProviderAccountState(id: $0.id, name: $0.name, state: state)
+        }
+    }
 
     var isVisibleInDashboard: Bool {
         isToolInstalled != false

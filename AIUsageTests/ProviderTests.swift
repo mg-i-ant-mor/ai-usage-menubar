@@ -114,6 +114,72 @@ final class ProviderTests: XCTestCase {
         XCTAssertEqual(requestCount, 1)
     }
 
+    func testClaudeShowsOtherConfigDirectoryAccounts() async throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        func credentials(_ token: String) -> String {
+            encodedJSON(ClaudeCredentialsDocument(claudeAiOauth: ClaudeOAuth(
+                accessToken: token,
+                refreshToken: nil,
+                expiresAt: (now.timeIntervalSince1970 + 3_600) * 1_000,
+                subscriptionType: nil,
+                rateLimitTier: nil,
+                scopes: ["user:profile"]
+            )))
+        }
+        func profile(_ account: String, _ org: String) -> String {
+            """
+            {"oauthAccount": {"accountUuid": "\(account)", "organizationUuid": "o",
+             "emailAddress": "me@example.com", "organizationName": "\(org)"}}
+            """
+        }
+        let team = "/Users/me/.claude-team"
+        let duplicate = "/Users/me/.claude-copy"
+        let teamService = "Claude Code-credentials-\(ProviderParsing.shortSHA256(team))"
+        let keychain = MemoryKeychain(currentUser: [
+            "Claude Code-credentials": credentials("personal"),
+            teamService: credentials("team")
+        ])
+        let files = MemoryFiles([
+            "~/.claude.json": profile("a", "me@example.com's Organization"),
+            "\(team)/.claude.json": profile("b", "Acme"),
+            "\(duplicate)/.claude.json": profile("a", "me@example.com's Organization")
+        ])
+        let http = MockHTTPClient([
+            httpResponse(json: #"{"five_hour": {"utilization": 10}}"#),
+            httpResponse(json: #"{"five_hour": {"utilization": 70}}"#)
+        ])
+        let date = FixedDateProvider(value: now)
+        @Sendable func store(_ directory: String?) -> ClaudeAuthStore {
+            ClaudeAuthStore(
+                environment: MockEnvironment(),
+                files: files,
+                keychain: keychain,
+                dateProvider: date,
+                configDirectory: directory
+            )
+        }
+        let client = ClaudeUsageClient(http: http)
+        let provider = ClaudeProvider(
+            authStore: store(nil),
+            client: client,
+            dateProvider: date,
+            accountDirectories: { [duplicate, team] },
+            makeAccountProvider: {
+                ClaudeProvider(authStore: store($0), client: client, dateProvider: date)
+            }
+        )
+
+        let snapshot = try await provider.fetch()
+
+        XCTAssertEqual(snapshot.accountName, "me@example.com")
+        XCTAssertEqual(snapshot.sessionWindow?.usedPercent, 10)
+        // The copy of the default login is skipped; the team login has its own card.
+        XCTAssertEqual(snapshot.otherAccounts.map(\.name), ["Acme"])
+        XCTAssertEqual(snapshot.otherAccounts.first?.snapshot?.sessionWindow?.usedPercent, 70)
+        let tokens = await http.capturedRequests().map { $0.headers["Authorization"] }
+        XCTAssertEqual(tokens, ["Bearer personal", "Bearer team"])
+    }
+
     func testCodexProactiveRefreshUsesExactSourceAndFormEncoding() async throws {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let auth = CodexAuth(

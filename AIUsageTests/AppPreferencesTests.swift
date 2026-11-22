@@ -21,6 +21,21 @@ final class AppPreferencesTests: XCTestCase {
     }
 
     @MainActor
+    func testMenuBarAccountChoiceStartsWithDefaultLoginsAndPersists() {
+        let preferences = AppPreferences(defaults: defaults)
+        XCTAssertTrue(preferences.isMenuBarAccountSelected("claude"))
+        XCTAssertFalse(preferences.isMenuBarAccountSelected("/Users/me/.claude-personale"))
+
+        preferences.setMenuBarAccount("/Users/me/.claude-personale", selected: true)
+        preferences.setMenuBarAccount("claude", selected: false)
+
+        let restored = AppPreferences(defaults: defaults)
+        XCTAssertFalse(restored.isMenuBarAccountSelected("claude"))
+        XCTAssertTrue(restored.isMenuBarAccountSelected("/Users/me/.claude-personale"))
+        XCTAssertTrue(restored.isMenuBarAccountSelected("codex"))
+    }
+
+    @MainActor
     func testFreshInstallDefaultsMatchProductChoices() {
         let preferences = AppPreferences(defaults: defaults)
 

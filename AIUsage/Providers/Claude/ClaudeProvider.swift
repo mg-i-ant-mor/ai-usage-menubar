@@ -4,7 +4,7 @@ import Foundation
 actor ClaudeProvider: UsageProvider {
     nonisolated let id = ProviderID.claude
 
-    private let authStore: ClaudeAuthStore
+    nonisolated let authStore: ClaudeAuthStore
     private let client: ClaudeUsageClient
     private let dateProvider: DateProviding
     private var activeCredentialFingerprint: Data?
@@ -12,6 +12,10 @@ actor ClaudeProvider: UsageProvider {
     private var rateLimitStrikes = 0
     private var resetGrants: ClaudeResetGrants?
     private var resetGrantsCheckedAt: Date?
+    private let accountDirectories: @Sendable () -> [String]
+    private let makeAccountProvider: @Sendable (String) -> ClaudeProvider
+    private var accountProviders: [String: ClaudeProvider] = [:]
+    private var lastAccountSnapshots: [String: ProviderSnapshot] = [:]
 
     /// Claude Code checks its reset grants only occasionally, and Anthropic
     /// answers a polled grants read with `429`.
@@ -20,15 +24,59 @@ actor ClaudeProvider: UsageProvider {
     init(
         authStore: ClaudeAuthStore = ClaudeAuthStore(),
         client: ClaudeUsageClient = ClaudeUsageClient(),
-        dateProvider: DateProviding = SystemDateProvider()
+        dateProvider: DateProviding = SystemDateProvider(),
+        accountDirectories: @escaping @Sendable () -> [String] = { [] },
+        makeAccountProvider: (@Sendable (String) -> ClaudeProvider)? = nil
     ) {
         self.authStore = authStore
         self.client = client
         self.dateProvider = dateProvider
+        self.accountDirectories = accountDirectories
+        self.makeAccountProvider = makeAccountProvider ?? {
+            ClaudeProvider(authStore: ClaudeAuthStore(configDirectory: $0))
+        }
     }
 
+    // ponytail: the default login's failure hides the other accounts too;
+    // give each account its own state if that becomes a real case.
     func fetch() async throws -> ProviderSnapshot {
-        try await fetch(credentialReloadsRemaining: 1)
+        var snapshot = try await fetch(credentialReloadsRemaining: 1)
+        let primary = authStore.account()
+        var seen: Set<String> = Set([primary?.key].compactMap { $0 })
+        var others: [ProviderAccount] = []
+
+        for directory in accountDirectories() {
+            let provider = accountProviders[directory] ?? makeAccountProvider(directory)
+            accountProviders[directory] = provider
+            let profile = provider.authStore.account()
+            if let key = profile?.key, !seen.insert(key).inserted { continue }
+
+            let name = profile?.displayName
+                ?? URL(fileURLWithPath: directory).lastPathComponent
+            do {
+                let account = try await provider.fetch()
+                lastAccountSnapshots[directory] = account
+                others.append(ProviderAccount(id: directory, name: name, snapshot: account))
+            } catch {
+                let failure = error as? ProviderFailure
+                    ?? ProviderFailure(.transient, "Claude could not be reached.")
+                if !failure.preservesLastGood {
+                    lastAccountSnapshots[directory] = nil
+                }
+                others.append(ProviderAccount(
+                    id: directory,
+                    name: name,
+                    snapshot: lastAccountSnapshots[directory],
+                    failure: failure
+                ))
+            }
+        }
+
+        if !others.isEmpty {
+            snapshot.accountName = primary?.displayName
+            snapshot.otherAccounts = others
+        }
+        return snapshot
     }
 
     private func fetch(credentialReloadsRemaining: Int) async throws -> ProviderSnapshot {

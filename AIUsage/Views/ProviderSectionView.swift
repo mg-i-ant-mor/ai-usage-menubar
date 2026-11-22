@@ -4,13 +4,16 @@ import SwiftUI
 struct ProviderSectionView: View {
     let state: ProviderState
     let displayMode: UsageDisplayMode
+    let accountName: String?
 
     init(
         state: ProviderState,
-        displayMode: UsageDisplayMode = .used
+        displayMode: UsageDisplayMode = .used,
+        accountName: String? = nil
     ) {
         self.state = state
         self.displayMode = displayMode
+        self.accountName = accountName
     }
 
     var body: some View {
@@ -72,6 +75,14 @@ struct ProviderSectionView: View {
 
             Text(state.provider.displayName)
                 .font(.headline.weight(.semibold))
+
+            if let accountName {
+                Text(accountName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
 
             Spacer(minLength: 8)
 

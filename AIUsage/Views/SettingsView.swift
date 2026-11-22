@@ -93,6 +93,9 @@ struct SettingsView: View {
                         )
                     ),
                     availableItems: availableItems,
+                    accounts: store.states[descriptor.id]?.accounts ?? [],
+                    isAccountSelected: preferences.isMenuBarAccountSelected,
+                    setAccount: preferences.setMenuBarAccount,
                     setTracking: { enabled in
                         preferences.setTracking(
                             enabled,
@@ -408,6 +411,9 @@ private struct ProviderSettingsRow: View {
     let isVisible: Bool
     let selectedMetrics: Set<MenuBarMetricID>
     let availableItems: [MenuBarItemID]
+    let accounts: [ProviderAccountState]
+    let isAccountSelected: (String) -> Bool
+    let setAccount: (String, Bool) -> Void
     let setTracking: (Bool) -> Void
     let setVisible: (Bool) -> Void
     let setMetric: (MenuBarItemID, Bool) -> Void
@@ -473,8 +479,13 @@ private struct ProviderSettingsRow: View {
                 Divider()
                     .frame(height: 20)
 
-                menuBarMetrics
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 4) {
+                    menuBarMetrics
+                    if accounts.count > 1 {
+                        menuBarAccounts
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -545,6 +556,26 @@ private struct ProviderSettingsRow: View {
                         )
                     )
                 }
+            }
+        }
+    }
+
+    /// With no account ticked the menu bar falls back to the default login.
+    private var menuBarAccounts: some View {
+        WrappingHStack(spacing: 8, lineSpacing: 4) {
+            ForEach(accounts) { account in
+                Toggle(
+                    account.name ?? "Default login",
+                    isOn: Binding(
+                        get: { isAccountSelected(account.id) },
+                        set: { setAccount(account.id, $0) }
+                    )
+                )
+                .font(.caption)
+                .toggleStyle(.checkbox)
+                .controlSize(.small)
+                .disabled(!isTracking || !isVisible)
+                .help("Show this account in the menu bar")
             }
         }
     }
