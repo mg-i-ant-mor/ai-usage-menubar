@@ -7,6 +7,8 @@ struct ClaudeOAuth: Codable, Equatable, Sendable {
     var subscriptionType: String?
     var rateLimitTier: String?
     var scopes: [String]?
+    var accountUuid: String?
+    var organizationUuid: String?
 }
 
 struct ClaudeCredentialsDocument: Codable, Equatable, Sendable {
@@ -97,17 +99,31 @@ struct ClaudeAuthStore: Sendable {
             .filter { FileManager.default.fileExists(atPath: "\($0)/.claude.json") }
     }
 
-    /// The Claude Code profile beside this login (`.claude.json`).
+    /// Who this login is. The credential names the account; `.claude.json`
+    /// adds the email and organization name, but only when it describes the
+    /// same organization: other Claude Code clients (the desktop app's
+    /// sessions) rewrite the default `.claude.json` with their own account.
     func account() -> ClaudeAccountProfile? {
         let path = configurationDirectoryOverride().map { "\($0)/.claude.json" }
             ?? "~/.claude.json"
-        guard let text = try? files.readText(path),
-              let data = text.data(using: .utf8),
-              let document = try? JSONDecoder().decode(ClaudeProfileDocument.self, from: data)
-        else {
-            return nil
+        let profile = (try? files.readText(path))
+            .flatMap { $0.data(using: .utf8) }
+            .flatMap { try? JSONDecoder().decode(ClaudeProfileDocument.self, from: $0) }?
+            .oauthAccount
+        guard let oauth = loadCandidates().first?.oauth,
+              let accountUuid = oauth.accountUuid else {
+            return profile
         }
-        return document.oauthAccount
+        if profile?.accountUuid == accountUuid,
+           profile?.organizationUuid == oauth.organizationUuid {
+            return profile
+        }
+        return ClaudeAccountProfile(
+            accountUuid: accountUuid,
+            organizationUuid: oauth.organizationUuid,
+            emailAddress: nil,
+            organizationName: oauth.subscriptionType.map { "Claude \($0.capitalized)" }
+        )
     }
 
     func loadCandidates() -> [ClaudeCredentialState] {
