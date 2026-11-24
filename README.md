@@ -27,7 +27,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-dark.webp">
-    <img src="docs/images/hero-light.webp" width="880" alt="AI Usage open below its menu bar item. Claude Code has 62% of its session and 36% of its weekly limit left, with extra usage and two banked resets. Codex has 88% and 74% left with three banked resets.">
+    <img src="docs/images/hero-light.webp" width="880" alt="AI Usage open below its menu bar item. Claude Code has 22% of its session left and an hourglass, since at this pace it runs out before it resets, and 36% of its weekly limit left with a daily budget, extra usage, and two banked resets. Codex has 88% and 74% left with three banked resets.">
   </picture>
 </p>
 
@@ -59,6 +59,13 @@ features below and ships its own releases and update feed.
 - **Works behind a broken proxy.** Provider requests skip the system proxy, so
   an unreachable proxy auto-config file no longer makes every provider show
   "could not be reached".
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/providers-dark.webp">
+    <img src="docs/images/providers-light.webp" width="880" alt="Usage cards for every supported tool, with two Claude Code accounts, Personal and Work. Each bar has an on-pace mark, and each limit of a day or longer shows its daily budget.">
+  </picture>
+</p>
 
 Release notes are in [docs/releases](docs/releases).
 
