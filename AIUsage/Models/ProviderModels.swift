@@ -334,6 +334,8 @@ struct MenuBarProviderConfiguration:
 {
     let provider: ProviderID
     let metrics: [MenuBarMetricID]
+    /// Accounts to show; the default login when none of them exists.
+    var accountIDs: Set<String> = []
 
     var id: ProviderID { provider }
 }
@@ -359,9 +361,86 @@ struct QuotaWindow: Identifiable, Equatable, Sendable {
     let kind: QuotaKind
     let usedPercent: Double
     let resetsAt: Date?
+    /// When the window began, from the provider or its known length.
+    var startsAt: Date? = nil
+
+    /// The share of a window that has to pass before its pace is trusted.
+    static let minimumElapsedFraction = 0.1
 
     var id: QuotaKind { kind }
     var renderedFraction: Double { min(max(usedPercent / 100, 0), 1) }
+
+    /// When the window fills at its average pace since it started, measured
+    /// when `usedPercent` was read; `nil` unless that comes before the reset.
+    /// With a `schedule`, a window longer than a day measures its pace in
+    /// working time, so nights and days off neither slow the pace nor count
+    /// as time left to use.
+    func projectedExhaustion(
+        measuredAt: Date,
+        schedule: WorkSchedule? = nil,
+        calendar: Calendar = .current
+    ) -> Date? {
+        guard let start = startsAt, let reset = resetsAt,
+              usedPercent > 0, usedPercent < 100,
+              start < measuredAt, measuredAt < reset else { return nil }
+
+        if let schedule, reset.timeIntervalSince(start) > 86_400 {
+            let elapsed = schedule.workingTime(from: start, to: measuredAt, calendar: calendar)
+            let total = schedule.workingTime(from: start, to: reset, calendar: calendar)
+            guard elapsed > 0, elapsed >= total * Self.minimumElapsedFraction else { return nil }
+            let needed = (100 - usedPercent) * elapsed / usedPercent
+            guard needed < schedule.workingTime(from: measuredAt, to: reset, calendar: calendar)
+            else { return nil }
+            return schedule.date(byAddingWorkingTime: needed, to: measuredAt, calendar: calendar)
+        }
+
+        let elapsed = measuredAt.timeIntervalSince(start)
+        guard elapsed >= reset.timeIntervalSince(start) * Self.minimumElapsedFraction
+        else { return nil }
+        let exhaustion = measuredAt.addingTimeInterval(
+            (100 - usedPercent) * elapsed / usedPercent
+        )
+        return exhaustion < reset ? exhaustion : nil
+    }
+
+    /// The share of the limit, in percent, that can be used each day from
+    /// `now` until the reset without running out. Plain arithmetic on the
+    /// current reading, not a forecast. `nil` for windows shorter than a day,
+    /// within a day of the reset, without a future reset, or when exhausted.
+    func dailyBudget(now: Date) -> Double? {
+        guard let reset = resetsAt, usedPercent < 100 else { return nil }
+        if let start = startsAt, reset.timeIntervalSince(start) < 86_400 { return nil }
+        let days = reset.timeIntervalSince(now) / 86_400
+        guard days >= 1 else { return nil }
+        return max(100 - usedPercent, 0) / days
+    }
+
+    /// The used percent that would land exactly on 100% at the reset: the
+    /// share of the window that has passed at `now`. With a `schedule`, a
+    /// window longer than a day counts working time only, like the forecast;
+    /// shorter windows always count calendar time. `nil` without a known
+    /// start and reset, or outside the window.
+    func onPacePercent(
+        now: Date,
+        schedule: WorkSchedule? = nil,
+        calendar: Calendar = .current
+    ) -> Double? {
+        guard let start = startsAt, let reset = resetsAt,
+              start <= now, now < reset else { return nil }
+        if let schedule, reset.timeIntervalSince(start) > 86_400 {
+            let total = schedule.workingTime(from: start, to: reset, calendar: calendar)
+            guard total > 0 else { return nil }
+            return schedule.workingTime(from: start, to: now, calendar: calendar) / total * 100
+        }
+        return now.timeIntervalSince(start) / reset.timeIntervalSince(start) * 100
+    }
+
+    /// `15`, or `1.9` under ten: the number part of `15%/day`.
+    static func budgetText(_ budget: Double) -> String {
+        (budget * 10).rounded() / 10 >= 10
+            ? "\(Int(budget.rounded()))"
+            : String(format: "%.1f", budget)
+    }
 }
 
 enum BillingUsage: Equatable, Sendable {
@@ -449,6 +528,9 @@ struct ProviderSnapshot: Equatable, Sendable {
     let billingUsage: BillingUsage?
     let resets: UsageResets?
     let fetchedAt: Date
+    /// Set only when the provider found more than one account.
+    var accountName: String?
+    var otherAccounts: [ProviderAccount] = []
 
     init(
         provider: ProviderID,
@@ -480,6 +562,24 @@ struct ProviderSnapshot: Equatable, Sendable {
     func window(for metric: MenuBarMetricID) -> QuotaWindow? {
         guard let quotaKind = metric.quotaKind else { return nil }
         return windows.first { $0.kind == quotaKind }
+    }
+
+    /// The metric's window runs out before its reset at its current pace,
+    /// and that reset is still ahead of `now`.
+    func isAtRisk(_ metric: MenuBarMetricID, now: Date, schedule: WorkSchedule? = nil) -> Bool {
+        exhaustion(for: metric, now: now, schedule: schedule) != nil
+    }
+
+    /// When the metric's window fills at its current pace, while its reset
+    /// is still ahead of `now` and comes after that.
+    func exhaustion(
+        for metric: MenuBarMetricID,
+        now: Date,
+        schedule: WorkSchedule? = nil
+    ) -> Date? {
+        guard let window = window(for: metric),
+              let reset = window.resetsAt, now < reset else { return nil }
+        return window.projectedExhaustion(measuredAt: fetchedAt, schedule: schedule)
     }
 
     var availableMenuBarItems: [MenuBarItemID] {
@@ -567,6 +667,22 @@ struct ProviderFailure: LocalizedError, Equatable, Sendable {
     }
 }
 
+/// Another login for the same provider, such as a second Claude account
+/// kept in its own `CLAUDE_CONFIG_DIR`.
+struct ProviderAccount: Equatable, Identifiable, Sendable {
+    let id: String
+    let name: String
+    var snapshot: ProviderSnapshot?
+    var failure: ProviderFailure?
+}
+
+/// One account's state, as the menu bar and Settings list them.
+struct ProviderAccountState: Identifiable {
+    let id: String
+    let name: String?
+    let state: ProviderState
+}
+
 struct ProviderState: Equatable, Sendable {
     let provider: ProviderID
     var snapshot: ProviderSnapshot?
@@ -575,6 +691,21 @@ struct ProviderState: Equatable, Sendable {
     var isToolInstalled: Bool?
 
     var isStale: Bool { snapshot != nil && failure != nil }
+
+    /// The default login, whose id is the provider's raw value, then the
+    /// other accounts it found.
+    var accounts: [ProviderAccountState] {
+        let primary = ProviderAccountState(
+            id: provider.rawValue,
+            name: snapshot?.accountName,
+            state: self
+        )
+        return [primary] + (snapshot?.otherAccounts ?? []).map {
+            var state = ProviderState(provider: provider, snapshot: $0.snapshot, failure: $0.failure)
+            state.isToolInstalled = isToolInstalled
+            return ProviderAccountState(id: $0.id, name: $0.name, state: state)
+        }
+    }
 
     var isVisibleInDashboard: Bool {
         isToolInstalled != false

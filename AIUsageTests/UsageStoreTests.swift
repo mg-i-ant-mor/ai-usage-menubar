@@ -43,6 +43,69 @@ final class UsageStoreTests: XCTestCase {
         )
     }
 
+    func testMenuBarReadingCarriesRiskFromSnapshot() async {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        func store(used: Double) -> UsageStore {
+            let snapshot = ProviderSnapshot(
+                provider: .claude,
+                planName: "Pro",
+                windows: [QuotaWindow(
+                    kind: .session,
+                    usedPercent: used,
+                    resetsAt: t0.addingTimeInterval(5 * 3_600),
+                    startsAt: t0
+                )],
+                fetchedAt: t0.addingTimeInterval(3_600)
+            )
+            return UsageStore(
+                providers: [SequencedProvider(id: .claude, results: [.success(snapshot)])],
+                availabilityChecker: FixedProviderAvailabilityChecker(installed: [.claude])
+            )
+        }
+        let item = MenuBarItemID(provider: .claude, metric: .session)
+
+        let fast = store(used: 40)
+        await fast.refresh()
+        XCTAssertEqual(fast.menuBarReading(for: item)?.isAtRisk, true)
+        XCTAssertEqual(fast.menuBarReading(for: item)?.resetsAt, t0.addingTimeInterval(5 * 3_600))
+        XCTAssertEqual(fast.menuBarReading(for: item)?.exhaustsAt, t0.addingTimeInterval(2.5 * 3_600))
+
+        let slow = store(used: 10)
+        await slow.refresh()
+        XCTAssertEqual(slow.menuBarReading(for: item)?.isAtRisk, false)
+        XCTAssertNil(slow.menuBarReading(for: item)?.exhaustsAt)
+    }
+
+    func testMenuBarReadingsFollowTheWorkSchedule() async {
+        let saturday = ProviderParsing.date("2027-01-23T12:00:00Z")!
+        let snapshot = ProviderSnapshot(
+            provider: .claude,
+            planName: "Pro",
+            windows: [QuotaWindow(
+                kind: .weekly,
+                usedPercent: 85,
+                resetsAt: ProviderParsing.date("2027-01-25T08:00:00Z"),
+                startsAt: ProviderParsing.date("2027-01-18T08:00:00Z")
+            )],
+            fetchedAt: saturday
+        )
+        let store = UsageStore(
+            providers: [SequencedProvider(id: .claude, results: [.success(snapshot)])],
+            availabilityChecker: FixedProviderAvailabilityChecker(installed: [.claude])
+        )
+        let item = MenuBarItemID(provider: .claude, metric: .weekly)
+        await store.refresh()
+
+        XCTAssertEqual(store.menuBarReading(for: item)?.isAtRisk, true)
+        XCTAssertEqual(store.menuBarReading(for: item, workSchedule: .standard)?.isAtRisk, false)
+        let configuration = MenuBarProviderConfiguration(provider: .claude, metrics: [.weekly])
+        XCTAssertEqual(
+            store.menuBarProviderReadings(for: [configuration], workSchedule: .standard)
+                .first?.readings.first?.isAtRisk,
+            false
+        )
+    }
+
     func testAuthenticationFailureClearsLastGoodAndHidesUnavailableMetric() async {
         let snapshot = ProviderSnapshot(
             provider: .codex,
@@ -128,6 +191,52 @@ final class UsageStoreTests: XCTestCase {
             groups[1].readings.map(\.metric),
             [.session, .weekly]
         )
+    }
+
+    func testMenuBarShowsTheChosenClaudeAccounts() async {
+        var primary = ProviderSnapshot(
+            provider: .claude,
+            planName: "Team",
+            windows: [QuotaWindow(kind: .weekly, usedPercent: 70, resetsAt: nil)],
+            fetchedAt: Date()
+        )
+        primary.accountName = "Acme"
+        primary.otherAccounts = [ProviderAccount(
+            id: "/Users/me/.claude-personale",
+            name: "me@example.com",
+            snapshot: ProviderSnapshot(
+                provider: .claude,
+                planName: "Pro",
+                windows: [QuotaWindow(kind: .weekly, usedPercent: 8, resetsAt: nil)],
+                fetchedAt: Date()
+            )
+        )]
+        let store = UsageStore(
+            providers: [SequencedProvider(id: .claude, results: [.success(primary)])],
+            availabilityChecker: FixedProviderAvailabilityChecker(installed: [.claude])
+        )
+        await store.refresh()
+
+        func groups(_ accounts: Set<String>) -> [MenuBarProviderReadings] {
+            store.menuBarProviderReadings(for: [MenuBarProviderConfiguration(
+                provider: .claude,
+                metrics: [.weekly],
+                accountIDs: accounts
+            )])
+        }
+
+        let both = groups(["claude", "/Users/me/.claude-personale"])
+        XCTAssertEqual(both.map(\.title), [
+            "Claude Code · Acme",
+            "Claude Code · me@example.com"
+        ])
+        XCTAssertEqual(both.flatMap(\.readings).map(\.value), [.percentage(70), .percentage(8)])
+        XCTAssertEqual(
+            groups(["/Users/me/.claude-personale"]).flatMap(\.readings).map(\.value),
+            [.percentage(8)]
+        )
+        // Nothing chosen for this provider: the default login stays visible.
+        XCTAssertEqual(groups([]).flatMap(\.readings).map(\.value), [.percentage(70)])
     }
 
     func testProviderGroupFallsBackToDefaultMetricWhenSelectionIsMissing() async {

@@ -4,7 +4,7 @@ import Foundation
 actor ClaudeProvider: UsageProvider {
     nonisolated let id = ProviderID.claude
 
-    private let authStore: ClaudeAuthStore
+    nonisolated let authStore: ClaudeAuthStore
     private let client: ClaudeUsageClient
     private let dateProvider: DateProviding
     private var activeCredentialFingerprint: Data?
@@ -12,6 +12,10 @@ actor ClaudeProvider: UsageProvider {
     private var rateLimitStrikes = 0
     private var resetGrants: ClaudeResetGrants?
     private var resetGrantsCheckedAt: Date?
+    private let accountDirectories: @Sendable () -> [String]
+    private let makeAccountProvider: @Sendable (String) -> ClaudeProvider
+    private var accountProviders: [String: ClaudeProvider] = [:]
+    private var lastAccountSnapshots: [String: ProviderSnapshot] = [:]
 
     /// Claude Code checks its reset grants only occasionally, and Anthropic
     /// answers a polled grants read with `429`.
@@ -20,15 +24,59 @@ actor ClaudeProvider: UsageProvider {
     init(
         authStore: ClaudeAuthStore = ClaudeAuthStore(),
         client: ClaudeUsageClient = ClaudeUsageClient(),
-        dateProvider: DateProviding = SystemDateProvider()
+        dateProvider: DateProviding = SystemDateProvider(),
+        accountDirectories: @escaping @Sendable () -> [String] = { [] },
+        makeAccountProvider: (@Sendable (String) -> ClaudeProvider)? = nil
     ) {
         self.authStore = authStore
         self.client = client
         self.dateProvider = dateProvider
+        self.accountDirectories = accountDirectories
+        self.makeAccountProvider = makeAccountProvider ?? {
+            ClaudeProvider(authStore: ClaudeAuthStore(configDirectory: $0))
+        }
     }
 
+    // ponytail: the default login's failure hides the other accounts too;
+    // give each account its own state if that becomes a real case.
     func fetch() async throws -> ProviderSnapshot {
-        try await fetch(credentialReloadsRemaining: 1)
+        var snapshot = try await fetch(credentialReloadsRemaining: 1)
+        let primary = authStore.account()
+        var seen: Set<String> = Set([primary?.key].compactMap { $0 })
+        var others: [ProviderAccount] = []
+
+        for directory in accountDirectories() {
+            let provider = accountProviders[directory] ?? makeAccountProvider(directory)
+            accountProviders[directory] = provider
+            let profile = provider.authStore.account()
+            if let key = profile?.key, !seen.insert(key).inserted { continue }
+
+            let name = profile?.displayName
+                ?? URL(fileURLWithPath: directory).lastPathComponent
+            do {
+                let account = try await provider.fetch()
+                lastAccountSnapshots[directory] = account
+                others.append(ProviderAccount(id: directory, name: name, snapshot: account))
+            } catch {
+                let failure = error as? ProviderFailure
+                    ?? ProviderFailure(.transient, "Claude could not be reached.")
+                if !failure.preservesLastGood {
+                    lastAccountSnapshots[directory] = nil
+                }
+                others.append(ProviderAccount(
+                    id: directory,
+                    name: name,
+                    snapshot: lastAccountSnapshots[directory],
+                    failure: failure
+                ))
+            }
+        }
+
+        if !others.isEmpty {
+            snapshot.accountName = primary?.displayName
+            snapshot.otherAccounts = others
+        }
+        return snapshot
     }
 
     private func fetch(credentialReloadsRemaining: Int) async throws -> ProviderSnapshot {
@@ -48,6 +96,15 @@ actor ClaudeProvider: UsageProvider {
                 return try await probe(candidate, generation: &generation)
             } catch ClaudeProviderError.credentialsChanged where credentialReloadsRemaining > 0 {
                 return try await fetch(credentialReloadsRemaining: credentialReloadsRemaining - 1)
+            } catch ClaudeProviderError.credentialsChanged {
+                // The stored login changed again after the reload. The other
+                // candidates were loaded before that change, so probing them
+                // could not publish a reading, and refreshing one would
+                // rotate a token that could not be saved.
+                throw ProviderFailure(
+                    .transient,
+                    "Claude's login changed while refreshing. Try again."
+                )
             } catch let failure as ProviderFailure where failure.kind == .authentication {
                 lastAuthenticationFailure = failure
                 continue
@@ -103,6 +160,9 @@ actor ClaudeProvider: UsageProvider {
             accessToken: accessToken,
             includingResetGrants: readsResetGrants
         )
+        if let blocked = Self.organizationBlockFailure(response) {
+            throw blocked
+        }
         if response.statusCode == 401 || response.statusCode == 403 {
             guard let refreshToken = nonEmpty(state.oauth.refreshToken) else {
                 throw ProviderFailure(
@@ -122,6 +182,9 @@ actor ClaudeProvider: UsageProvider {
                 accessToken: refreshedToken,
                 includingResetGrants: readsResetGrants
             )
+            if let blocked = Self.organizationBlockFailure(response) {
+                throw blocked
+            }
             if response.statusCode == 401 || response.statusCode == 403 {
                 throw ProviderFailure(
                     .authentication,
@@ -170,6 +233,24 @@ actor ClaudeProvider: UsageProvider {
         rateLimitStrikes = 0
         generation = expectedGeneration
         return snapshot
+    }
+
+    /// A `403` that names the organization's own setting. Signing in again or
+    /// renewing the token cannot change it, so it is reported as it is.
+    static func organizationBlockFailure(_ response: HTTPResponse) -> ProviderFailure? {
+        guard response.statusCode == 403,
+              let body = try? ProviderParsing.object(from: response.body),
+              let error = ProviderParsing.object(body["error"]),
+              let details = ProviderParsing.object(error["details"]),
+              ProviderParsing.string(details["error_code"]) == "oauth_not_allowed_for_organization"
+        else {
+            return nil
+        }
+        return ProviderFailure(
+            .authentication,
+            "This Claude organization doesn't allow OAuth sign-ins, " +
+                "so its usage can't be read."
+        )
     }
 
     /// Five minutes, doubling with each consecutive limit, up to an hour.

@@ -8,8 +8,8 @@ if [[ $# -ne 1 ]]; then
 fi
 
 version="${1#v}"
-if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    printf 'Version must use SemVer, for example 0.1.0.\n' >&2
+if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    printf 'Version must be <upstream x.y.z>.<fork revision>, for example 0.5.0.1.\n' >&2
     exit 1
 fi
 
@@ -24,7 +24,7 @@ application_binary="$built_application/Contents/MacOS/AI Usage"
 sparkle_framework="$built_application/Contents/Frameworks/Sparkle.framework"
 disk_image="$artifact_directory/AI-Usage.dmg"
 checksum="$artifact_directory/AI-Usage.dmg.sha256"
-sparkle_account="ai-usage-menubar"
+sparkle_account="ai-usage-menubar-mg"
 # Signing reads the key from Keychain unless SPARKLE_PRIVATE_KEY_FILE points
 # at an exported copy, which avoids a Keychain prompt for each Sparkle tool.
 sparkle_key_arguments=(--account "$sparkle_account")
@@ -66,11 +66,18 @@ if [[ "$configured_version" != "$version" ]]; then
     exit 1
 fi
 
+# Every public build since 0.3.0 is signed by this Developer ID team. macOS and
+# Sparkle compare an update's team with the installed app's, so a build signed
+# by any other certificate must not be packaged as a release, even when that
+# certificate is the only Developer ID in the Keychain.
+release_team_id="${AI_USAGE_RELEASE_TEAM_ID:-QCB78CL77T}"
+
 codesign_identity="${AI_USAGE_CODESIGN_IDENTITY:-}"
 if [[ -z "$codesign_identity" ]]; then
     codesign_identity="$(
         security find-identity -v -p codesigning 2>/dev/null |
-            awk '/Developer ID Application:/ { print $2; exit }'
+            awk -v team="($release_team_id)" \
+                '/Developer ID Application:/ && index($0, team) { print $2; exit }'
     )"
 fi
 
@@ -85,8 +92,8 @@ if [[ -n "$codesign_identity" ]]; then
 else
     printf 'Building a universal ad-hoc signed app…\n'
     printf \
-        'Warning: no Developer ID Application identity was found; this build cannot be notarized.\n' \
-        >&2
+        'Warning: no Developer ID Application identity for team %s was found; this build cannot be notarized.\n' \
+        "$release_team_id" >&2
     build_settings+=(
         "CODE_SIGN_STYLE=Automatic"
         "ENABLE_HARDENED_RUNTIME=NO"
@@ -145,6 +152,20 @@ fi
 /usr/bin/lipo -verify_arch x86_64 "$application_binary"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$built_application"
 
+if [[ -n "$codesign_identity" ]]; then
+    built_team_id="$(
+        /usr/bin/codesign -dv "$built_application" 2>&1 |
+            awk -F '=' '/^TeamIdentifier=/ { print $2 }'
+    )"
+    if [[ "$built_team_id" != "$release_team_id" ]]; then
+        printf \
+            'The app is signed by team %s, but releases are signed by team %s.\n' \
+            "${built_team_id:-unknown}" \
+            "$release_team_id" >&2
+        exit 1
+    fi
+fi
+
 embedded_version="$(
     /usr/libexec/PlistBuddy \
         -c 'Print :CFBundleShortVersionString' \
@@ -160,7 +181,7 @@ feed_url="$(
         -c 'Print :SUFeedURL' \
         "$built_application/Contents/Info.plist"
 )"
-expected_feed_url="https://raw.githubusercontent.com/burakgon/ai-usage-menubar/main/appcast.xml"
+expected_feed_url="https://raw.githubusercontent.com/mg-i-ant-mor/ai-usage-menubar/main/appcast.xml"
 if [[ "$feed_url" != "$expected_feed_url" ]]; then
     printf 'Unexpected Sparkle feed URL: %s\n' "$feed_url" >&2
     exit 1
@@ -313,9 +334,9 @@ printf 'Generating signed Sparkle appcast…\n'
 "$generate_appcast" \
     "${sparkle_key_arguments[@]}" \
     --download-url-prefix \
-    "https://github.com/burakgon/ai-usage-menubar/releases/download/v$version/" \
+    "https://github.com/mg-i-ant-mor/ai-usage-menubar/releases/download/v$version/" \
     --embed-release-notes \
-    --link "https://github.com/burakgon/ai-usage-menubar" \
+    --link "https://github.com/mg-i-ant-mor/ai-usage-menubar" \
     --maximum-versions 5 \
     --maximum-deltas 0 \
     "$updates_directory"

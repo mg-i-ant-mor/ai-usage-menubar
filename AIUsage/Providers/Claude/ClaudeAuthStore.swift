@@ -7,6 +7,8 @@ struct ClaudeOAuth: Codable, Equatable, Sendable {
     var subscriptionType: String?
     var rateLimitTier: String?
     var scopes: [String]?
+    var accountUuid: String?
+    var organizationUuid: String?
 }
 
 struct ClaudeCredentialsDocument: Codable, Equatable, Sendable {
@@ -67,17 +69,61 @@ struct ClaudeAuthStore: Sendable {
     let files: TextFileAccessing
     let keychain: KeychainAccessing
     let dateProvider: DateProviding
+    /// A second login's `CLAUDE_CONFIG_DIR`. Nil reads the default login.
+    let configDirectory: String?
 
     init(
         environment: EnvironmentReading = ProcessEnvironmentReader(),
         files: TextFileAccessing = LocalTextFileAccessor(),
         keychain: KeychainAccessing = SecurityKeychainAccessor(),
-        dateProvider: DateProviding = SystemDateProvider()
+        dateProvider: DateProviding = SystemDateProvider(),
+        configDirectory: String? = nil
     ) {
         self.environment = environment
         self.files = files
         self.keychain = keychain
         self.dateProvider = dateProvider
+        self.configDirectory = configDirectory
+    }
+
+    /// Config directories of other Claude Code logins, by the
+    /// `~/.claude-<name>` convention for `CLAUDE_CONFIG_DIR`.
+    static func additionalConfigDirectories(
+        home: String = FileManager.default.homeDirectoryForCurrentUser.path
+    ) -> [String] {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: home)) ?? []
+        return names
+            .filter { $0.hasPrefix(".claude-") || $0.hasPrefix(".claude_") }
+            .sorted()
+            .map { "\(home)/\($0)" }
+            .filter { FileManager.default.fileExists(atPath: "\($0)/.claude.json") }
+    }
+
+    /// Who this login is. The credential names the account; `.claude.json`
+    /// adds the email and organization name, but only when it describes the
+    /// same organization: other Claude Code clients (the desktop app's
+    /// sessions) rewrite the default `.claude.json` with their own account.
+    func account() -> ClaudeAccountProfile? {
+        let path = configurationDirectoryOverride().map { "\($0)/.claude.json" }
+            ?? "~/.claude.json"
+        let profile = (try? files.readText(path))
+            .flatMap { $0.data(using: .utf8) }
+            .flatMap { try? JSONDecoder().decode(ClaudeProfileDocument.self, from: $0) }?
+            .oauthAccount
+        guard let oauth = loadCandidates().first?.oauth,
+              let accountUuid = oauth.accountUuid else {
+            return profile
+        }
+        if profile?.accountUuid == accountUuid,
+           profile?.organizationUuid == oauth.organizationUuid {
+            return profile
+        }
+        return ClaudeAccountProfile(
+            accountUuid: accountUuid,
+            organizationUuid: oauth.organizationUuid,
+            emailAddress: nil,
+            organizationName: oauth.subscriptionType.map { "Claude \($0.capitalized)" }
+        )
     }
 
     func loadCandidates() -> [ClaudeCredentialState] {
@@ -211,7 +257,9 @@ struct ClaudeAuthStore: Sendable {
             return [base]
         }
         let normalized = directory.precomposedStringWithCanonicalMapping
-        return ["\(base)-\(ProviderParsing.shortSHA256(normalized))", base]
+        let hashed = "\(base)-\(ProviderParsing.shortSHA256(normalized))"
+        // A second login must never fall back to the default one.
+        return configDirectory == nil ? [hashed, base] : [hashed]
     }
 
     private func credentialsPath() -> String {
@@ -219,6 +267,7 @@ struct ClaudeAuthStore: Sendable {
     }
 
     private func configurationDirectoryOverride() -> String? {
+        if let configDirectory { return configDirectory }
         guard let value = environment.value(for: "CLAUDE_CONFIG_DIR")?
             .trimmingCharacters(in: .whitespacesAndNewlines),
               !value.isEmpty else {
@@ -226,4 +275,29 @@ struct ClaudeAuthStore: Sendable {
         }
         return value
     }
+}
+
+struct ClaudeAccountProfile: Decodable, Equatable, Sendable {
+    var accountUuid: String?
+    var organizationUuid: String?
+    var emailAddress: String?
+    var organizationName: String?
+
+    /// Team organizations have a real name; personal ones are called
+    /// "<email>'s Organization", where the email reads better.
+    var displayName: String? {
+        if let organizationName, !organizationName.hasSuffix("'s Organization") {
+            return organizationName
+        }
+        return emailAddress ?? organizationName
+    }
+
+    var key: String? {
+        guard let accountUuid else { return nil }
+        return "\(accountUuid)/\(organizationUuid ?? "")"
+    }
+}
+
+private struct ClaudeProfileDocument: Decodable {
+    var oauthAccount: ClaudeAccountProfile?
 }

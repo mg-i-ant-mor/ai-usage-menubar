@@ -181,8 +181,20 @@ struct DashboardContentView: View {
                 if let state = store.states[provider] {
                     ProviderSectionView(
                         state: state,
-                        displayMode: usageDisplayMode
+                        displayMode: usageDisplayMode,
+                        accountName: state.snapshot?.accountName
                     )
+                    ForEach(state.snapshot?.otherAccounts ?? []) { account in
+                        ProviderSectionView(
+                            state: ProviderState(
+                                provider: provider,
+                                snapshot: account.snapshot,
+                                failure: account.failure
+                            ),
+                            displayMode: usageDisplayMode,
+                            accountName: account.name
+                        )
+                    }
                 }
             }
         }

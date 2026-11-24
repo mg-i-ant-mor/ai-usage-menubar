@@ -22,9 +22,10 @@ enum AntigravityUsageMapper {
     ]
 
     /// Maps one or more `RetrieveUserQuotaSummary` bodies, merged by bucket id
-    /// with the first usable bucket winning. A host can omit a whole pool, so
-    /// no single body is trusted to be complete. Returns `nil` only when no
-    /// body is a quota summary at all. Buckets without a usable
+    /// with the first usable bucket winning, so the caller lists the host
+    /// that counts Antigravity's usage first. A host can omit a whole pool,
+    /// so no single body is trusted to be complete. Returns `nil` only when
+    /// no body is a quota summary at all. Buckets without a usable
     /// `remainingFraction` are dropped rather than reported as 0% or 100%.
     static func summary(
         _ bodies: [Data],
@@ -178,10 +179,15 @@ enum AntigravityUsageMapper {
             return nil
         }
         let clamped = min(max(remaining, 0), 1)
+        let reset = ProviderParsing.date(bucket["resetTime"])
+        let length: TimeInterval = kind == .session || kind == .claudePool
+            ? 5 * 3_600
+            : 7 * 86_400
         return QuotaWindow(
             kind: kind,
             usedPercent: ((1 - clamped) * 100).rounded(),
-            resetsAt: ProviderParsing.date(bucket["resetTime"])
+            resetsAt: reset,
+            startsAt: ProviderParsing.windowStart(endingAt: reset, length: length)
         )
     }
 

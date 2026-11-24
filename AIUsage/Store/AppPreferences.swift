@@ -31,6 +31,18 @@ final class AppPreferences {
         }
     }
 
+    /// Accounts shown in the menu bar: a provider's raw value for its
+    /// default login, another account's id otherwise. Nil shows only the
+    /// default logins.
+    private(set) var menuBarAccountIDs: Set<String>? {
+        didSet {
+            defaults.set(
+                Self.encode(menuBarAccountIDs.map { Array($0).sorted() }),
+                forKey: Key.menuBarAccountIDs
+            )
+        }
+    }
+
     /// User-chosen display order of providers. Always contains every
     /// `ProviderID` exactly once.
     private(set) var providerOrder: [ProviderID] {
@@ -70,6 +82,24 @@ final class AppPreferences {
         didSet {
             defaults.set(refreshInterval.rawValue, forKey: Key.refreshInterval)
         }
+    }
+
+    /// Measure the pace of windows longer than a day in working hours.
+    var countsWorkingHoursOnly: Bool {
+        didSet {
+            defaults.set(countsWorkingHoursOnly, forKey: Key.countsWorkingHoursOnly)
+        }
+    }
+
+    var workSchedule: WorkSchedule {
+        didSet {
+            defaults.set(Self.encode(workSchedule), forKey: Key.workSchedule)
+        }
+    }
+
+    /// The schedule the forecast uses, or `nil` while it is turned off.
+    var activeWorkSchedule: WorkSchedule? {
+        countsWorkingHoursOnly ? workSchedule : nil
     }
 
     @ObservationIgnored
@@ -193,6 +223,12 @@ final class AppPreferences {
             hasCompletedInitialSetup = hasLegacyInstallation
         }
 
+        menuBarAccountIDs = Self.decode(
+            [String].self,
+            forKey: Key.menuBarAccountIDs,
+            in: defaults
+        ).map(Set.init)
+
         usageDisplayMode = Self.value(
             UsageDisplayMode.self,
             forKey: Key.usageDisplayMode,
@@ -203,6 +239,12 @@ final class AppPreferences {
             forKey: Key.refreshInterval,
             in: defaults
         ) ?? .fiveMinutes
+        countsWorkingHoursOnly = defaults.bool(forKey: Key.countsWorkingHoursOnly)
+        workSchedule = Self.decode(
+            WorkSchedule.self,
+            forKey: Key.workSchedule,
+            in: defaults
+        ) ?? .standard
 
         if hasLegacyInstallation &&
             defaults.object(forKey: Key.hasCompletedInitialSetup) == nil {
@@ -217,9 +259,28 @@ final class AppPreferences {
             }
             return MenuBarProviderConfiguration(
                 provider: provider,
-                metrics: selectedMenuBarMetrics(for: provider)
+                metrics: selectedMenuBarMetrics(for: provider),
+                accountIDs: selectedMenuBarAccountIDs
             )
         }
+    }
+
+    private var selectedMenuBarAccountIDs: Set<String> {
+        menuBarAccountIDs ?? Set(ProviderID.allCases.map(\.rawValue))
+    }
+
+    func isMenuBarAccountSelected(_ accountID: String) -> Bool {
+        selectedMenuBarAccountIDs.contains(accountID)
+    }
+
+    func setMenuBarAccount(_ accountID: String, selected: Bool) {
+        var ids = selectedMenuBarAccountIDs
+        if selected {
+            ids.insert(accountID)
+        } else {
+            ids.remove(accountID)
+        }
+        menuBarAccountIDs = ids
     }
 
     /// Moves `provider` to the position currently held by `target`.
@@ -524,6 +585,7 @@ final class AppPreferences {
         static let menuBarMetricSelections =
             "menuBarMetricSelections.v3"
         static let providerOrder = "providerOrder.v1"
+        static let menuBarAccountIDs = "menuBarAccountIDs.v1"
         static let hasConfiguredMenuBar =
             "menuBarConfigured.v3"
         static let currentMenuBarItems = "menuBarItems.v2"
@@ -542,5 +604,7 @@ final class AppPreferences {
         static let menuBarWindow = "menuBarWindow"
         static let usageDisplayMode = "usageDisplayMode"
         static let refreshInterval = "refreshInterval"
+        static let countsWorkingHoursOnly = "countsWorkingHoursOnly.v1"
+        static let workSchedule = "workSchedule.v1"
     }
 }

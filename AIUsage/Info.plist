@@ -31,9 +31,9 @@
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUFeedURL</key>
-	<string>https://raw.githubusercontent.com/burakgon/ai-usage-menubar/main/appcast.xml</string>
+	<string>https://raw.githubusercontent.com/mg-i-ant-mor/ai-usage-menubar/main/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string>Axec4KdnVCK/H0z6UrhigcI44LRzdrN8vnBxIvqPurc=</string>
+	<string>pB6UOvPJUxcWlHmNx++Gwayq1swlji99bbV8cBkeyg0=</string>
 	<key>SURequireSignedFeed</key>
 	<true/>
 	<key>SUScheduledCheckInterval</key>

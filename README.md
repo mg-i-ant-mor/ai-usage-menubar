@@ -59,7 +59,7 @@ your tools already have, so there is nothing to set up.
 | --- | --- | --- |
 | **Claude Code** | Session, weekly, Sonnet, and Fable limits, extra usage in your billing currency, banked resets | Claude Code's saved login |
 | **Codex** | Session, weekly, and Spark limits, credits, banked resets | Codex's ChatGPT login |
-| **Cursor** | Total, Auto, and API usage, on-demand spend | Cursor's login |
+| **Cursor** | Total, Auto, and API usage, on-demand spend | The Cursor CLI's login (`agent login`), or the editor's before Cursor 3.27 |
 | **Antigravity** | Gemini session and weekly limits, Argon, Claude pool | Antigravity's Google login, or the running app or `agy` |
 | **GitHub Copilot** | Credits, chat, and completions | Copilot's editor sign-in or the GitHub CLI |
 | **Devin** | Daily and weekly quota | Devin's login |
@@ -69,6 +69,17 @@ your tools already have, so there is nothing to set up.
 
 Only tools installed on your Mac get a card. A tool that's signed out stays
 visible and tells you what to do.
+
+**More than one Claude account?** Sign the second one in to Claude Code with its
+own config directory, named `~/.claude-<something>`:
+
+```bash
+CLAUDE_CONFIG_DIR=~/.claude-work claude
+```
+
+Each account then gets its own card, labeled with its organization or email.
+In Settings, tick which accounts the menu bar shows, one or both; with none
+ticked it shows the default login.
 
 ## Choose what the menu bar shows
 
@@ -103,6 +114,20 @@ time.
   accounts that have none, the tool's default limit is shown instead.
 - The panel lists when each banked reset expires and turns the next one orange
   in its final 24 hours.
+- When a limit is on pace to run out before it resets, its card shows when it
+  will be full, and an hourglass marks it in the panel and the menu bar. The
+  pace is the average since the limit's window started, worked out from the
+  current reading, so nothing is stored between refreshes. Turn on
+  **Working hours only** in Settings to measure weekly and monthly limits in
+  your working days and hours, so nights and weekends don't skew the pace.
+- A thin mark on each bar shows where usage would be now to reach the limit
+  exactly at its reset. Past the mark you're ahead of pace. Sessions always
+  measure it in clock time; with **Working hours only**, weekly and monthly
+  limits measure it in your working time.
+- Limits that last a day or more, such as weekly and monthly ones, show how
+  much you can use each day until they reset without running out, as in
+  `6.1%/day · Reset 1d 23h` on the card. It's the share left divided by the days left, so it isn't
+  shown in the last 24 hours before a reset or once a limit is used up.
 - Percentages are shown exactly as the provider reports them. Only the bars are
   clamped to `0...100`, and a remaining percentage never goes below zero.
 
@@ -156,6 +181,17 @@ subscription usage.
 
 Setup tokens don't include the profile scope Claude's usage endpoint requires.
 Sign in to Claude Code normally and AI Usage picks up that login.
+
+</details>
+
+<details>
+<summary><b>Cursor says its editor login is encrypted.</b></summary>
+
+Cursor 3.27 and later encrypt the editor's saved login with a key only Cursor
+can read, and AI Usage doesn't open another app's private storage. It reads the
+Cursor CLI's login instead: install the
+[Cursor CLI](https://cursor.com/docs/cli/installation) and run `agent login`
+once.
 
 </details>
 
@@ -216,10 +252,11 @@ as described in [SECURITY.md](SECURITY.md).
 
 Provider contracts and parts of the system-boundary implementation were adapted
 from [OpenUsage](https://github.com/robinebers/openusage), using stable tag
-`v0.7.6`, local language-server discovery from tag `v0.7.16`, and provider
-updates through commit `fdf7a234b76b6a71522880cc9ab5b38044471698`. See
-[NOTICE](NOTICE) for attribution. Provider names and marks belong to their
-owners and don't imply endorsement.
+`v0.7.6`, local language-server discovery from tag `v0.7.16`, provider
+updates through commit `fdf7a234b76b6a71522880cc9ab5b38044471698`, and the
+Antigravity quota host order and client identity from commits `ee98159` and
+`e1ffa57`. See [NOTICE](NOTICE) for attribution. Provider names and marks
+belong to their owners and don't imply endorsement.
 
 ## License
 

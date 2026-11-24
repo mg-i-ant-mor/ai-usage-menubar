@@ -7,28 +7,59 @@ struct MenuBarReading: Equatable, Sendable {
     let value: MenuBarReadingValue
     let displayMode: UsageDisplayMode
     let isStale: Bool
+    /// The window runs out before its reset at its current pace.
+    let isAtRisk: Bool
+    let resetsAt: Date?
+    /// When the window fills at its current pace, if before `resetsAt`.
+    let exhaustsAt: Date?
 
     init(
         provider: ProviderID,
         metric: MenuBarMetricID,
         value: MenuBarReadingValue,
         displayMode: UsageDisplayMode,
-        isStale: Bool
+        isStale: Bool,
+        isAtRisk: Bool = false,
+        resetsAt: Date? = nil,
+        exhaustsAt: Date? = nil
     ) {
         self.provider = provider
         self.metric = metric
         self.value = value
         self.displayMode = displayMode
         self.isStale = isStale
+        self.isAtRisk = isAtRisk
+        self.resetsAt = resetsAt
+        self.exhaustsAt = exhaustsAt
     }
 }
 
 struct MenuBarProviderReadings: Equatable, Identifiable, Sendable {
     let provider: ProviderID
+    var accountID: String
+    /// Set only when the provider has more than one account.
+    var accountName: String?
     let selectedMetrics: [MenuBarMetricID]
     let readings: [MenuBarReading]
 
-    var id: ProviderID { provider }
+    init(
+        provider: ProviderID,
+        accountID: String? = nil,
+        accountName: String? = nil,
+        selectedMetrics: [MenuBarMetricID],
+        readings: [MenuBarReading]
+    ) {
+        self.provider = provider
+        self.accountID = accountID ?? provider.rawValue
+        self.accountName = accountName
+        self.selectedMetrics = selectedMetrics
+        self.readings = readings
+    }
+
+    var id: String { accountID }
+    var title: String {
+        accountName.map { "\(provider.displayName) · \($0)" } ?? provider.displayName
+    }
     var showsMetricLabels: Bool { readings.count > 1 }
 }
 
@@ -50,7 +81,9 @@ final class UsageStore {
 
     init(
         providers: [any UsageProvider] = [
-            ClaudeProvider(),
+            ClaudeProvider(accountDirectories: {
+                ClaudeAuthStore.additionalConfigDirectories()
+            }),
             CodexProvider(),
             CursorProvider(),
             AntigravityProvider(),
@@ -222,11 +255,29 @@ final class UsageStore {
 
     func menuBarReadings(
         for items: [MenuBarItemID],
-        displayMode: UsageDisplayMode = .used
+        displayMode: UsageDisplayMode = .used,
+        workSchedule: WorkSchedule? = nil
     ) -> [MenuBarReading] {
         items.compactMap { item in
+            guard let state = states[item.provider] else { return nil }
+            return readings(
+                for: [item],
+                in: state,
+                displayMode: displayMode,
+                workSchedule: workSchedule
+            ).first
+        }
+    }
+
+    private func readings(
+        for items: [MenuBarItemID],
+        in state: ProviderState,
+        displayMode: UsageDisplayMode,
+        workSchedule: WorkSchedule?
+    ) -> [MenuBarReading] {
+        let now = Date()
+        return items.compactMap { item in
             guard trackedProviderIDs.contains(item.provider),
-                  let state = states[item.provider],
                   state.isToolInstalled != false,
                   let value = state.snapshot?.menuBarValue(
                     for: item.metric,
@@ -235,64 +286,88 @@ final class UsageStore {
                 return nil
             }
 
+            let exhaustion = state.snapshot?.exhaustion(
+                for: item.metric,
+                now: now,
+                schedule: workSchedule
+            )
             return MenuBarReading(
                 provider: item.provider,
                 metric: item.metric,
                 value: value,
                 displayMode: displayMode,
-                isStale: state.isStale
+                isStale: state.isStale,
+                isAtRisk: exhaustion != nil,
+                resetsAt: state.snapshot?.window(for: item.metric)?.resetsAt,
+                exhaustsAt: exhaustion
             )
         }
     }
 
     func menuBarProviderReadings(
         for configurations: [MenuBarProviderConfiguration],
-        displayMode: UsageDisplayMode = .used
+        displayMode: UsageDisplayMode = .used,
+        workSchedule: WorkSchedule? = nil
     ) -> [MenuBarProviderReadings] {
-        configurations.compactMap { configuration in
+        configurations.flatMap { configuration -> [MenuBarProviderReadings] in
             guard trackedProviderIDs.contains(configuration.provider),
                   let state = states[configuration.provider],
                   state.isToolInstalled != false else {
-                return nil
+                return []
             }
 
+            let accounts = state.accounts
+            let chosen = accounts.filter { configuration.accountIDs.contains($0.id) }
             let items = configuration.metrics.map {
                 MenuBarItemID(
                     provider: configuration.provider,
                     metric: $0
                 )
             }
-            var readings = menuBarReadings(
-                for: items,
-                displayMode: displayMode
-            )
-            // Selected metrics can vanish from the live snapshot (for
-            // example, Claude accounts without a five-hour window return
-            // `five_hour: null`). Show the provider's default metric rather
-            // than nothing, without touching the saved selection.
-            if readings.isEmpty,
-               let fallback = AppPreferences.defaultMenuBarItem(
-                   for: configuration.provider,
-                   in: availableMenuBarItems(for: configuration.provider)
-               ) {
-                readings = menuBarReadings(
-                    for: [fallback],
-                    displayMode: displayMode
+            return (chosen.isEmpty ? [accounts[0]] : chosen).map { account in
+                var readings = self.readings(
+                    for: items,
+                    in: account.state,
+                    displayMode: displayMode,
+                    workSchedule: workSchedule
+                )
+                // Selected metrics can vanish from the live snapshot (for
+                // example, Claude accounts without a five-hour window return
+                // `five_hour: null`). Show the provider's default metric rather
+                // than nothing, without touching the saved selection.
+                if readings.isEmpty,
+                   let fallback = AppPreferences.defaultMenuBarItem(
+                       for: configuration.provider,
+                       in: account.state.snapshot?.availableMenuBarItems ?? []
+                   ) {
+                    readings = self.readings(
+                        for: [fallback],
+                        in: account.state,
+                        displayMode: displayMode,
+                        workSchedule: workSchedule
+                    )
+                }
+                return MenuBarProviderReadings(
+                    provider: configuration.provider,
+                    accountID: account.id,
+                    accountName: accounts.count > 1 ? account.name : nil,
+                    selectedMetrics: configuration.metrics,
+                    readings: readings
                 )
             }
-            return MenuBarProviderReadings(
-                provider: configuration.provider,
-                selectedMetrics: configuration.metrics,
-                readings: readings
-            )
         }
     }
 
     func menuBarReading(
         for item: MenuBarItemID,
-        displayMode: UsageDisplayMode = .used
+        displayMode: UsageDisplayMode = .used,
+        workSchedule: WorkSchedule? = nil
     ) -> MenuBarReading? {
-        menuBarReadings(for: [item], displayMode: displayMode).first
+        menuBarReadings(
+            for: [item],
+            displayMode: displayMode,
+            workSchedule: workSchedule
+        ).first
     }
 
     private func applyInstalledProviders(_ installedProviders: Set<ProviderID>?) {

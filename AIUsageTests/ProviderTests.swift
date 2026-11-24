@@ -64,6 +64,157 @@ final class ProviderTests: XCTestCase {
         XCTAssertEqual(savedDocument.claudeAiOauth?.refreshToken, "new-refresh")
     }
 
+    func testClaudeOrganizationBlockDoesNotRefreshAndReportsReason() async {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let oauth = ClaudeOAuth(
+            accessToken: "access",
+            refreshToken: "refresh",
+            expiresAt: (now.timeIntervalSince1970 + 3_600) * 1_000,
+            subscriptionType: nil,
+            rateLimitTier: nil,
+            scopes: ["user:profile"]
+        )
+        let keychain = MemoryKeychain(currentUser: [
+            "Claude Code-credentials":
+                encodedJSON(ClaudeCredentialsDocument(claudeAiOauth: oauth))
+        ])
+        let http = MockHTTPClient([
+            httpResponse(403, json: """
+            {"type":"error","error":{"type":"permission_error","details":{"error_code":"oauth_not_allowed_for_organization"}}}
+            """)
+        ])
+        let date = FixedDateProvider(value: now)
+        let provider = ClaudeProvider(
+            authStore: ClaudeAuthStore(
+                environment: MockEnvironment(),
+                files: MemoryFiles(),
+                keychain: keychain,
+                dateProvider: date
+            ),
+            client: ClaudeUsageClient(http: http),
+            dateProvider: date
+        )
+
+        do {
+            _ = try await provider.fetch()
+            XCTFail("Expected authentication failure")
+        } catch let failure as ProviderFailure {
+            XCTAssertEqual(failure.kind, .authentication)
+            XCTAssertTrue(failure.message.contains("organization"))
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+        let requests = await http.capturedRequests()
+        XCTAssertFalse(requests.contains { $0.url == ClaudeAuthStore.refreshURL })
+    }
+
+    func testClaudeOrdinary403StillRenewsOnceBeforeAnOrganizationBlockIsReported() async {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let http = MockHTTPClient([
+            httpResponse(403, json: """
+            {"type":"error","error":{"type":"permission_error","message":"Forbidden"}}
+            """),
+            httpResponse(json: """
+            {"access_token": "new-access", "refresh_token": "new-refresh", "expires_in": 3600}
+            """),
+            httpResponse(403, json: """
+            {"type":"error","error":{"type":"permission_error","details":{"error_code":"oauth_not_allowed_for_organization"}}}
+            """)
+        ])
+        let date = FixedDateProvider(value: now)
+        let provider = ClaudeProvider(
+            authStore: ClaudeAuthStore(
+                environment: MockEnvironment(),
+                files: MemoryFiles(),
+                keychain: claudeKeychain(expiresAt: now.addingTimeInterval(3_600)),
+                dateProvider: date
+            ),
+            client: ClaudeUsageClient(http: http),
+            dateProvider: date
+        )
+
+        do {
+            _ = try await provider.fetch()
+            XCTFail("Expected authentication failure")
+        } catch let failure as ProviderFailure {
+            XCTAssertEqual(failure.kind, .authentication)
+            XCTAssertEqual(
+                failure.message,
+                "This Claude organization doesn't allow OAuth sign-ins, " +
+                    "so its usage can't be read."
+            )
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+        // A 403 without the organization's error code is still treated as an
+        // expired token: one renewal, one retry.
+        let requests = await http.capturedRequests()
+        XCTAssertEqual(requests.map(\.url), [
+            ClaudeAuthStore.usageWithResetGrantsURL,
+            ClaudeAuthStore.refreshURL,
+            ClaudeAuthStore.usageWithResetGrantsURL
+        ])
+    }
+
+    func testClaudeStopsWhenTheLoginKeepsChanging() async {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        @Sendable func document(accessToken: String, expiresIn: TimeInterval) -> String {
+            encodedJSON(ClaudeCredentialsDocument(claudeAiOauth: ClaudeOAuth(
+                accessToken: accessToken,
+                refreshToken: "refresh",
+                expiresAt: (now.timeIntervalSince1970 + expiresIn) * 1_000,
+                subscriptionType: nil,
+                rateLimitTier: nil,
+                scopes: ["user:profile"]
+            )))
+        }
+        // Claude Code rotates its Keychain login during every read.
+        let keychain = RotatingKeychain { read in
+            document(accessToken: "access-\(read)", expiresIn: 3_600)
+        }
+        // A second login that is due for a token refresh.
+        let files = MemoryFiles([
+            "~/.claude/.credentials.json":
+                document(accessToken: "file-access", expiresIn: -60)
+        ])
+        let usage = httpResponse(json: """
+        {"five_hour": {"utilization": 31, "resets_at": 1800003600}}
+        """)
+        let http = MockHTTPClient([usage, usage])
+        let date = FixedDateProvider(value: now)
+        let provider = ClaudeProvider(
+            authStore: ClaudeAuthStore(
+                environment: MockEnvironment(),
+                files: files,
+                keychain: keychain,
+                dateProvider: date
+            ),
+            client: ClaudeUsageClient(http: http),
+            dateProvider: date
+        )
+
+        do {
+            _ = try await provider.fetch()
+            XCTFail("Expected a retryable failure")
+        } catch let failure as ProviderFailure {
+            XCTAssertEqual(failure.kind, .transient)
+            XCTAssertEqual(
+                failure.message,
+                "Claude's login changed while refreshing. Try again."
+            )
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+        // One usage read before the change and one after reloading. The
+        // file login was loaded before the second change, so it is neither
+        // probed nor refreshed against a login that no longer matches.
+        let requests = await http.capturedRequests()
+        XCTAssertEqual(requests.map(\.url), [
+            ClaudeAuthStore.usageWithResetGrantsURL,
+            ClaudeAuthStore.usageWithResetGrantsURL
+        ])
+    }
+
     func testClaudeCooldownSkipsSecondRequestAfter429() async {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let oauth = ClaudeOAuth(
@@ -112,6 +263,104 @@ final class ProviderTests: XCTestCase {
 
         let requestCount = await http.capturedRequests().count
         XCTAssertEqual(requestCount, 1)
+    }
+
+    func testClaudeShowsOtherConfigDirectoryAccounts() async throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        func credentials(_ token: String) -> String {
+            encodedJSON(ClaudeCredentialsDocument(claudeAiOauth: ClaudeOAuth(
+                accessToken: token,
+                refreshToken: nil,
+                expiresAt: (now.timeIntervalSince1970 + 3_600) * 1_000,
+                subscriptionType: nil,
+                rateLimitTier: nil,
+                scopes: ["user:profile"]
+            )))
+        }
+        func profile(_ account: String, _ org: String) -> String {
+            """
+            {"oauthAccount": {"accountUuid": "\(account)", "organizationUuid": "o",
+             "emailAddress": "me@example.com", "organizationName": "\(org)"}}
+            """
+        }
+        let team = "/Users/me/.claude-team"
+        let duplicate = "/Users/me/.claude-copy"
+        let teamService = "Claude Code-credentials-\(ProviderParsing.shortSHA256(team))"
+        let keychain = MemoryKeychain(currentUser: [
+            "Claude Code-credentials": credentials("personal"),
+            teamService: credentials("team")
+        ])
+        let files = MemoryFiles([
+            "~/.claude.json": profile("a", "me@example.com's Organization"),
+            "\(team)/.claude.json": profile("b", "Acme"),
+            "\(duplicate)/.claude.json": profile("a", "me@example.com's Organization")
+        ])
+        let http = MockHTTPClient([
+            httpResponse(json: #"{"five_hour": {"utilization": 10}}"#),
+            httpResponse(json: #"{"five_hour": {"utilization": 70}}"#)
+        ])
+        let date = FixedDateProvider(value: now)
+        @Sendable func store(_ directory: String?) -> ClaudeAuthStore {
+            ClaudeAuthStore(
+                environment: MockEnvironment(),
+                files: files,
+                keychain: keychain,
+                dateProvider: date,
+                configDirectory: directory
+            )
+        }
+        let client = ClaudeUsageClient(http: http)
+        let provider = ClaudeProvider(
+            authStore: store(nil),
+            client: client,
+            dateProvider: date,
+            accountDirectories: { [duplicate, team] },
+            makeAccountProvider: {
+                ClaudeProvider(authStore: store($0), client: client, dateProvider: date)
+            }
+        )
+
+        let snapshot = try await provider.fetch()
+
+        XCTAssertEqual(snapshot.accountName, "me@example.com")
+        XCTAssertEqual(snapshot.sessionWindow?.usedPercent, 10)
+        // The copy of the default login is skipped; the team login has its own card.
+        XCTAssertEqual(snapshot.otherAccounts.map(\.name), ["Acme"])
+        XCTAssertEqual(snapshot.otherAccounts.first?.snapshot?.sessionWindow?.usedPercent, 70)
+        let tokens = await http.capturedRequests().map { $0.headers["Authorization"] }
+        XCTAssertEqual(tokens, ["Bearer personal", "Bearer team"])
+    }
+
+    func testClaudeAccountComesFromTheCredentialWhenTheProfileIsAnotherOrganization() {
+        // The desktop app's sessions rewrite ~/.claude.json with their own
+        // organization while the keychain still holds the team login.
+        let keychain = MemoryKeychain(currentUser: [
+            "Claude Code-credentials": encodedJSON(ClaudeCredentialsDocument(
+                claudeAiOauth: ClaudeOAuth(
+                    accessToken: "team",
+                    subscriptionType: "team",
+                    accountUuid: "a",
+                    organizationUuid: "team-org"
+                )
+            ))
+        ])
+        let files = MemoryFiles([
+            "~/.claude.json": """
+            {"oauthAccount": {"accountUuid": "a", "organizationUuid": "personal-org",
+             "emailAddress": "me@example.com", "organizationName": "me@example.com's Organization"}}
+            """
+        ])
+        let store = ClaudeAuthStore(
+            environment: MockEnvironment(),
+            files: files,
+            keychain: keychain,
+            dateProvider: FixedDateProvider(value: Date())
+        )
+
+        let account = store.account()
+
+        XCTAssertEqual(account?.key, "a/team-org")
+        XCTAssertEqual(account?.displayName, "Claude Team")
     }
 
     func testCodexProactiveRefreshUsesExactSourceAndFormEncoding() async throws {

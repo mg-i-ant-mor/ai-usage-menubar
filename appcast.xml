@@ -1,133 +1,34 @@
-<?xml version="1.0" standalone="yes"?>
-<!-- sparkle-sign-warning:
+<?xml version="1.0" standalone="yes"?><!-- sparkle-sign-warning:
 IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
--->
-<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
     <channel>
         <title>AI Usage</title>
         <item>
-            <title>0.4.0</title>
-            <pubDate>Sat, 07 Nov 2026 13:04:36 +0300</pubDate>
-            <link>https://github.com/burakgon/ai-usage-menubar</link>
-            <sparkle:version>16</sparkle:version>
-            <sparkle:shortVersionString>0.4.0</sparkle:shortVersionString>
+            <title>0.5.0.1</title>
+            <pubDate>Tue, 24 Nov 2026 10:26:13 +0100</pubDate>
+            <link>https://github.com/mg-i-ant-mor/ai-usage-menubar</link>
+            <sparkle:version>1001</sparkle:version>
+            <sparkle:shortVersionString>0.5.0.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <description sparkle:format="markdown"><![CDATA[# AI Usage 0.4.0
+            <description sparkle:format="markdown"><![CDATA[# AI Usage 0.5.0.1
 
-This release adds Kiro and lets you put your providers in your own order.
+First release of the mg-i-ant-mor fork, built on AI Usage 0.5.0. From this
+version on, updates come from this fork's feed, signed with the fork's own
+Sparkle key.
 
-- Add Kiro's monthly credits, free-trial credits, and overage spend, using the
-  sign-in Kiro or `kiro-cli` already has, or `KIRO_API_KEY`.
-- Drag the handle beside each provider in Settings to reorder them. The usage
-  panel and the menu bar follow the same order. With VoiceOver, use the Move Up
-  and Move Down actions.
+- Forecast when a limit runs out, using your working hours.
+- Track more than one Claude account, each identified by its keychain login.
+- Show a detailed tooltip, with limit icons colored by how much is used.
+- Show a daily budget until each long limit resets, and mark the on-pace point
+  on each limit's bar.
 
-Thanks to whale9820 and abdullayevilkin for these contributions.
+This build is signed ad-hoc and not notarized. The first time you open the
+downloaded DMG, right-click the app and choose Open.
 ]]></description>
-            <enclosure url="https://github.com/burakgon/ai-usage-menubar/releases/download/v0.4.0/AI-Usage.dmg" length="4381021" type="application/octet-stream" sparkle:edSignature="cciR17pp5OIljTb6qXxbjITmsnKp8PoocO5mZIzGDsvuGh/0MFzcn3Ld4Y3kIagXC/71UlflZMdY0lY9DbNJDg=="/>
-        </item>
-        <item>
-            <title>0.3.2</title>
-            <pubDate>Fri, 06 Nov 2026 15:18:10 +0300</pubDate>
-            <link>https://github.com/burakgon/ai-usage-menubar</link>
-            <sparkle:version>15</sparkle:version>
-            <sparkle:shortVersionString>0.3.2</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <description sparkle:format="markdown"><![CDATA[# AI Usage 0.3.2
-
-This release keeps your other sign-ins intact when AI Usage renews a login.
-
-- Keep Claude Code's MCP server logins when AI Usage renews your Claude login.
-  Earlier versions dropped them, so Claude Code asked you to sign in to each
-  MCP server again.
-- Keep the rest of Grok's sign-in file when AI Usage renews its token, and
-  leave a login Grok renewed in the meantime untouched. Grok's rate limits now
-  show as rate limits.
-- Stop reporting an expired Antigravity session when Google only declines to
-  share the plan. AI Usage now asks both Google hosts before treating a token
-  as refused.
-- Keep the Update button's label readable on its blue glass.
-
-Thanks to straki and whale9820 for these fixes.
-]]></description>
-            <enclosure url="https://github.com/burakgon/ai-usage-menubar/releases/download/v0.3.2/AI-Usage.dmg" length="4240386" type="application/octet-stream" sparkle:edSignature="fcbEvD7VqFlPG5qYeD4ZxguEp0GA2P0x14ShVQiXeDMk3CQeOt690r47NsY6qwTEahZmf0fkeruGmjqaiHD3Cg=="/>
-        </item>
-        <item>
-            <title>0.3.1</title>
-            <pubDate>Thu, 05 Nov 2026 15:38:30 +0300</pubDate>
-            <link>https://github.com/burakgon/ai-usage-menubar</link>
-            <sparkle:version>14</sparkle:version>
-            <sparkle:shortVersionString>0.3.1</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <description sparkle:format="markdown"><![CDATA[# AI Usage 0.3.1
-
-This release keeps the providers AI Usage starts tracking after an update.
-
-- Remember newly supported providers after a relaunch. Since 0.2.0, Cursor,
-  Antigravity, GitHub Copilot, Devin, and Grok could stop being tracked the
-  next time AI Usage opened, and 0.3.0 did the same to Z.ai.
-- Track them again once on installations where they were dropped. A provider
-  you turn off in Settings stays off.
-]]></description>
-            <enclosure url="https://github.com/burakgon/ai-usage-menubar/releases/download/v0.3.1/AI-Usage.dmg" length="4235642" type="application/octet-stream" sparkle:edSignature="ifpuk/HnWIYay722jEzosfUGDrDarVwUB78ha+nYCuHYOSM6vNr8qJ4h7W6vAYTxcOGX9KQnbEXd98OmDb+8BA=="/>
-        </item>
-        <item>
-            <title>0.3.0</title>
-            <pubDate>Thu, 05 Nov 2026 15:03:08 +0300</pubDate>
-            <link>https://github.com/burakgon/ai-usage-menubar</link>
-            <sparkle:version>13</sparkle:version>
-            <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <description sparkle:format="markdown"><![CDATA[# AI Usage 0.3.0
-
-This release brings every provider up to date and adds Z.ai.
-
-- Show banked Claude Code and Codex usage-limit resets, when each one expires,
-  and an orange warning in the day before the next one expires.
-- Add Z.ai GLM Coding Plan session, weekly, and web search limits, using the
-  key Claude Code or OpenCode is already set up with.
-- Restore Antigravity's Gemini limits and plan, add the Argon weekly quota, and
-  read a running Antigravity app or `agy` CLI when Google withholds an
-  account's quota instead of reporting it as signed out.
-- Show Claude Code's weekly usage in the menu bar on accounts without a session
-  window.
-- Use current plan names: Claude Max and Ultra, and Codex Pro 100, 200, and 500.
-- Show Claude Code extra usage in your billing currency and Cursor on-demand
-  spend, and hide Codex credits on accounts without them.
-- Show fully used Devin quotas, explain Grok team accounts, and treat GitHub's
-  rate limits as rate limits instead of expired sign-ins.
-- Wait progressively longer after repeated Claude rate limits.
-- Use the official Copilot, Devin, and Grok marks, and keep provider cards
-  inside the panel while scrolling.
-
-Thanks to cneren, rafalozan0, whale9820, ofelipeguimaraes, and eurekarex018 for
-their reports and contributions.
-]]></description>
-            <enclosure url="https://github.com/burakgon/ai-usage-menubar/releases/download/v0.3.0/AI-Usage.dmg" length="4228324" type="application/octet-stream" sparkle:edSignature="onbwIJJHSp+KUCwtOYTPrPm1qhbBwk5GHov2ZhOIuazW1hQ9IUWt7qS9ah3dMOlOc8zv4FmxsxTlxqHvExgQCQ=="/>
-        </item>
-        <item>
-            <title>0.2.1</title>
-            <pubDate>Wed, 29 Jul 2026 17:16:15 +0300</pubDate>
-            <link>https://github.com/burakgon/ai-usage-menubar</link>
-            <sparkle:version>12</sparkle:version>
-            <sparkle:shortVersionString>0.2.1</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-            <description sparkle:format="markdown"><![CDATA[# AI Usage 0.2.1
-
-This release fixes the menu bar panel's inactive appearance in light mode.
-
-- Activate AI Usage before presenting its popover so Liquid Glass uses the
-  correct active light-mode colors immediately.
-- Make the presented popover the key window without requiring a second click.
-- Introduce the adaptive three-bar app icon in light and dark appearances.
-- Keep provider tracking, saved menu bar choices, refresh behavior, and
-  background efficiency unchanged.
-]]></description>
-            <enclosure url="https://github.com/burakgon/ai-usage-menubar/releases/download/v0.2.1/AI-Usage.dmg" length="3903422" type="application/octet-stream" sparkle:edSignature="byKnEnz8xSxHOqTCIEXGUItLYcT2oZhQFnJZogtG12hoP91AwrTnet2GvLOz+YkGys3F/4CsXg/5+d8AHUafDw=="/>
+            <enclosure url="https://github.com/mg-i-ant-mor/ai-usage-menubar/releases/download/v0.5.0.1/AI-Usage.dmg" length="4613686" type="application/octet-stream" sparkle:edSignature="iZg/Q/SVZp82Lthh9iTRtOU+NnlJ98FrutW5OWcXfc1zKsRRDzZY4vvLmVeMjXmnLNFGLkEr9QRuAMP4LlsUAQ=="></enclosure>
         </item>
     </channel>
-</rss>
-<!-- sparkle-signatures:
-edSignature: YtcAKmDb7NYd54xehDepBNnCt9VxBRbdp+JE0/sSI8oVNykvgV6WQ+PDwNI0qDZok5/FUwzYd42Oo4TaYP8ADA==
-length: 7593
+</rss><!-- sparkle-signatures:
+edSignature: NnjoW0jAtTbfSMYg/ITlBfqhxpMLOE3bIZPBPhwQ6ZU7M/X6/4JBhWMi8QXhrR9z2YQFxGlTxnJTFPhCDOcdCg==
+length: 1833
 -->

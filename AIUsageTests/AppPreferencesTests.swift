@@ -21,6 +21,21 @@ final class AppPreferencesTests: XCTestCase {
     }
 
     @MainActor
+    func testMenuBarAccountChoiceStartsWithDefaultLoginsAndPersists() {
+        let preferences = AppPreferences(defaults: defaults)
+        XCTAssertTrue(preferences.isMenuBarAccountSelected("claude"))
+        XCTAssertFalse(preferences.isMenuBarAccountSelected("/Users/me/.claude-personale"))
+
+        preferences.setMenuBarAccount("/Users/me/.claude-personale", selected: true)
+        preferences.setMenuBarAccount("claude", selected: false)
+
+        let restored = AppPreferences(defaults: defaults)
+        XCTAssertFalse(restored.isMenuBarAccountSelected("claude"))
+        XCTAssertTrue(restored.isMenuBarAccountSelected("/Users/me/.claude-personale"))
+        XCTAssertTrue(restored.isMenuBarAccountSelected("codex"))
+    }
+
+    @MainActor
     func testFreshInstallDefaultsMatchProductChoices() {
         let preferences = AppPreferences(defaults: defaults)
 
@@ -34,6 +49,24 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertFalse(preferences.hasCompletedInitialSetup)
         XCTAssertEqual(preferences.usageDisplayMode, .remaining)
         XCTAssertEqual(preferences.refreshInterval, .fiveMinutes)
+    }
+
+    @MainActor
+    func testWorkingHoursAreOffByDefaultAndPersist() {
+        let preferences = AppPreferences(defaults: defaults)
+        XCTAssertFalse(preferences.countsWorkingHoursOnly)
+        XCTAssertEqual(preferences.workSchedule, .standard)
+        XCTAssertNil(preferences.activeWorkSchedule)
+
+        preferences.countsWorkingHoursOnly = true
+        preferences.workSchedule = WorkSchedule(weekdays: [2, 3, 4, 5], startHour: 8, endHour: 17)
+
+        let reloaded = AppPreferences(defaults: defaults)
+        XCTAssertTrue(reloaded.countsWorkingHoursOnly)
+        XCTAssertEqual(
+            reloaded.activeWorkSchedule,
+            WorkSchedule(weekdays: [2, 3, 4, 5], startHour: 8, endHour: 17)
+        )
     }
 
     @MainActor
