@@ -7,7 +7,7 @@ final class AppLinksTests: XCTestCase {
         XCTAssertEqual(AppLinks.repository.host, "github.com")
         XCTAssertEqual(
             AppLinks.repository.path,
-            "/burakgon/ai-usage-menubar"
+            "/mg-i-ant-mor/ai-usage-menubar"
         )
     }
 }
