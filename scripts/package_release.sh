@@ -8,8 +8,8 @@ if [[ $# -ne 1 ]]; then
 fi
 
 version="${1#v}"
-if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    printf 'Version must use SemVer, for example 0.1.0.\n' >&2
+if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    printf 'Version must be <upstream x.y.z>.<fork revision>, for example 0.5.0.1.\n' >&2
     exit 1
 fi
 
@@ -24,7 +24,7 @@ application_binary="$built_application/Contents/MacOS/AI Usage"
 sparkle_framework="$built_application/Contents/Frameworks/Sparkle.framework"
 disk_image="$artifact_directory/AI-Usage.dmg"
 checksum="$artifact_directory/AI-Usage.dmg.sha256"
-sparkle_account="ai-usage-menubar"
+sparkle_account="ai-usage-menubar-mg"
 # Signing reads the key from Keychain unless SPARKLE_PRIVATE_KEY_FILE points
 # at an exported copy, which avoids a Keychain prompt for each Sparkle tool.
 sparkle_key_arguments=(--account "$sparkle_account")
@@ -181,7 +181,7 @@ feed_url="$(
         -c 'Print :SUFeedURL' \
         "$built_application/Contents/Info.plist"
 )"
-expected_feed_url="https://raw.githubusercontent.com/burakgon/ai-usage-menubar/main/appcast.xml"
+expected_feed_url="https://raw.githubusercontent.com/mg-i-ant-mor/ai-usage-menubar/main/appcast.xml"
 if [[ "$feed_url" != "$expected_feed_url" ]]; then
     printf 'Unexpected Sparkle feed URL: %s\n' "$feed_url" >&2
     exit 1
@@ -334,9 +334,9 @@ printf 'Generating signed Sparkle appcast…\n'
 "$generate_appcast" \
     "${sparkle_key_arguments[@]}" \
     --download-url-prefix \
-    "https://github.com/burakgon/ai-usage-menubar/releases/download/v$version/" \
+    "https://github.com/mg-i-ant-mor/ai-usage-menubar/releases/download/v$version/" \
     --embed-release-notes \
-    --link "https://github.com/burakgon/ai-usage-menubar" \
+    --link "https://github.com/mg-i-ant-mor/ai-usage-menubar" \
     --maximum-versions 5 \
     --maximum-deltas 0 \
     "$updates_directory"
