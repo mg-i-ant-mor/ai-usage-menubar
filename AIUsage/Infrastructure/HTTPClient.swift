@@ -37,6 +37,9 @@ actor URLSessionHTTPClient: HTTPClient {
         configuration.httpShouldSetCookies = false
         configuration.timeoutIntervalForRequest = 20
         configuration.timeoutIntervalForResource = 30
+        // Skip the system proxy: an unreachable PAC file stalls every request.
+        // ponytail: hard off, make it a setting if someone needs a mandatory proxy.
+        configuration.connectionProxyDictionary = [:]
         session = URLSession(configuration: configuration)
     }
 
