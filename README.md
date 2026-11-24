@@ -9,20 +9,19 @@
 
 <p align="center">
   <b>Every AI coding limit, right in your menu bar.</b><br>
-  See how much of Claude Code, Codex, Cursor, Antigravity, GitHub Copilot,<br>
-  Devin, Grok, Kiro, and Z.ai you have left, and when it resets.
+  The mg-i-ant-mor fork of
+  <a href="https://github.com/burakgon/ai-usage-menubar">burakgon/ai-usage-menubar</a>,
+  with forecasts, daily budgets, and more than one Claude account.
 </p>
 
 <p align="center">
-  <a href="https://github.com/burakgon/ai-usage-menubar/releases/latest"><img src="https://img.shields.io/github/v/release/burakgon/ai-usage-menubar?label=release&color=0B7F86" alt="Latest release"></a>
-  <a href="https://github.com/burakgon/ai-usage-menubar/releases"><img src="https://img.shields.io/github/downloads/burakgon/ai-usage-menubar/total?color=0B7F86" alt="Total downloads"></a>
   <img src="https://img.shields.io/badge/macOS-26%2B-0B7F86?logo=apple&logoColor=white" alt="Requires macOS 26 or later">
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/burakgon/ai-usage-menubar?color=0B7F86" alt="MIT License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-0B7F86" alt="MIT License"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/burakgon/ai-usage-menubar/releases/latest/download/AI-Usage.dmg"><img src="docs/images/download-button.png" width="232" alt="Download AI Usage for macOS"></a><br>
-  <sub>Free and open source. Notarized by Apple.</sub>
+  <a href="https://github.com/mg-i-ant-mor/ai-usage-menubar/releases/latest/download/AI-Usage.dmg"><img src="docs/images/download-button.png" width="232" alt="Download AI Usage for macOS"></a><br>
+  <sub>Signed ad-hoc: the first time, right-click the app and choose Open.</sub>
 </p>
 
 <p align="center">
@@ -32,54 +31,43 @@
   </picture>
 </p>
 
-Coding agents stop mid-task when a limit runs out. AI Usage keeps the numbers
-one glance away: what's left of every session and weekly limit, when each one
-resets, and how many banked resets you can still spend. It reuses the logins
-your tools already have, so there is nothing to set up.
+AI Usage shows what's left of every session and weekly limit of Claude Code,
+Codex, Cursor, Antigravity, GitHub Copilot, Devin, Grok, Kiro, and Z.ai, when
+each one resets, and how many banked resets you can still spend. It reuses the
+logins your tools already have, so there is nothing to set up.
 
-- **Nothing to set up.** No account, API key, or password. If you're signed in
-  to a tool, AI Usage can read its limits.
-- **Private.** It talks only to each provider's own usage endpoint. No
-  analytics, no servers of ours, no usage history.
-- **Light.** Measured at 0.0% CPU between refreshes. The panel is released as
-  soon as it closes.
-- **Native.** SwiftUI and Liquid Glass in light and dark, with signed automatic
-  updates.
+This repository is a fork of
+[burakgon/ai-usage-menubar](https://github.com/burakgon/ai-usage-menubar) by
+Burak Gon, released under the [MIT License](LICENSE). The app, its design, and
+almost all of its code come from the original project. The fork adds the
+features below and ships its own releases and update feed.
 
-## Supported tools
+## What this fork adds
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/providers-dark.webp">
-    <img src="docs/images/providers-light.webp" width="880" alt="Usage cards for all nine supported tools: Claude Code, Codex, Cursor, Antigravity, GitHub Copilot, Devin, Grok, Kiro, and Z.ai, each with its limits, plan, and reset times.">
-  </picture>
-</p>
+- **Forecast when a limit runs out.** When a limit is on pace to run out
+  before it resets, its card shows when it will be full and an hourglass marks
+  it. Turn on **Working hours only** to measure weekly and monthly limits in
+  your working days and hours, so nights and weekends don't skew the pace.
+- **On-pace mark and daily budget.** A thin mark on each bar shows where usage
+  would be now to reach the limit exactly at its reset. Limits that last a day
+  or more show how much you can use each day until they reset, as in
+  `6.1%/day · Reset 1d 23h`.
+- **More than one Claude account.** Each account is identified by its keychain
+  login and gets its own card. In Settings, tick which ones the menu bar shows.
+- **Detailed tooltip.** Hover the menu bar item for every limit, with limit
+  icons colored by how much is used.
+- **Works behind a broken proxy.** Provider requests skip the system proxy, so
+  an unreachable proxy auto-config file no longer makes every provider show
+  "could not be reached".
 
-| Tool | What you see | Where the login comes from |
-| --- | --- | --- |
-| **Claude Code** | Session, weekly, Sonnet, and Fable limits, extra usage in your billing currency, banked resets | Claude Code's saved login |
-| **Codex** | Session, weekly, and Spark limits, credits, banked resets | Codex's ChatGPT login |
-| **Cursor** | Total, Auto, and API usage, on-demand spend | The Cursor CLI's login (`agent login`), or the editor's before Cursor 3.27 |
-| **Antigravity** | Gemini session and weekly limits, Argon, Claude pool | Antigravity's Google login, or the running app or `agy` |
-| **GitHub Copilot** | Credits, chat, and completions | Copilot's editor sign-in or the GitHub CLI |
-| **Devin** | Daily and weekly quota | Devin's login |
-| **Grok** | Weekly quota | Grok CLI's login |
-| **Kiro** | Credits, free-trial credits, and overage spend | Kiro's or `kiro-cli`'s sign-in, or `KIRO_API_KEY` |
-| **Z.ai** | GLM Coding Plan session, weekly, and web search limits | The key Claude Code or OpenCode uses, or `ZAI_API_KEY` |
+Release notes are in [docs/releases](docs/releases).
 
-Only tools installed on your Mac get a card. A tool that's signed out stays
-visible and tells you what to do.
-
-**More than one Claude account?** Sign the second one in to Claude Code with its
-own config directory, named `~/.claude-<something>`:
+To track a second Claude account, sign it in to Claude Code with its own config
+directory, named `~/.claude-<something>`:
 
 ```bash
 CLAUDE_CONFIG_DIR=~/.claude-work claude
 ```
-
-Each account then gets its own card, labeled with its organization or email.
-In Settings, tick which accounts the menu bar shows, one or both; with none
-ticked it shows the default login.
 
 ## Choose what the menu bar shows
 
@@ -150,13 +138,17 @@ The exact provider contracts are documented in
 
 ## Install
 
-1. Download [AI-Usage.dmg](https://github.com/burakgon/ai-usage-menubar/releases/latest/download/AI-Usage.dmg).
+1. Download `AI-Usage.dmg` from the
+   [latest release](https://github.com/mg-i-ant-mor/ai-usage-menubar/releases/latest).
 2. Open it and drag **AI Usage** to Applications.
-3. Launch it. AI Usage lives in the menu bar, not the Dock.
+3. The first time, right-click **AI Usage** in Applications and choose **Open**,
+   then confirm. Builds are signed ad-hoc and not notarized, so a plain
+   double-click is blocked by Gatekeeper the first time.
 
-AI Usage needs macOS 26 or later and runs natively on Apple silicon and Intel.
-Builds are signed with a Developer ID and notarized by Apple. Updates install
-from the panel and are verified with Sparkle's EdDSA signatures.
+AI Usage lives in the menu bar, not the Dock. It needs macOS 26 or later and
+runs natively on Apple silicon and Intel. Updates come from this fork's own
+Sparkle feed, signed with the fork's key, so upstream releases never replace a
+fork build. Updates installed from the panel open without the Gatekeeper prompt.
 
 ## FAQ
 
@@ -215,7 +207,7 @@ No. Resets are shown read-only. Redeem them in the provider's own app.
 You need macOS 26 or later and Xcode 27 or later.
 
 ```bash
-git clone https://github.com/burakgon/ai-usage-menubar.git
+git clone https://github.com/mg-i-ant-mor/ai-usage-menubar.git
 cd ai-usage-menubar
 ./scripts/install.sh
 ```
@@ -240,15 +232,26 @@ for signed updates.
 - `./scripts/render_readme_images.sh` renders the README images from the real
   views with made-up data.
 - `./scripts/generate_app_icon.swift` regenerates the icon previews.
-- [docs/releasing.md](docs/releasing.md) covers packaging and the update feed.
+
+
+## Releasing
+
+Versions, packaging, the Sparkle key, and the appcast are described in
+[docs/releasing.md](docs/releasing.md).
 
 ## Contributing
 
-Bug reports, provider fixes, and pull requests are welcome. Please read
-[CONTRIBUTING.md](CONTRIBUTING.md) first, and report security issues privately
-as described in [SECURITY.md](SECURITY.md).
+Pull requests go to `develop`; `main` only receives `develop` during a release.
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) first, and report security issues
+privately as described in [SECURITY.md](SECURITY.md). Fixes that aren't
+specific to this fork are better sent to the
+[original project](https://github.com/burakgon/ai-usage-menubar).
 
 ## Credits
+
+AI Usage was created by Burak Gon at
+[burakgon/ai-usage-menubar](https://github.com/burakgon/ai-usage-menubar).
+This fork is maintained by mg-i-ant-mor.
 
 Provider contracts and parts of the system-boundary implementation were adapted
 from [OpenUsage](https://github.com/robinebers/openusage), using stable tag
@@ -260,21 +263,5 @@ belong to their owners and don't imply endorsement.
 
 ## License
 
-AI Usage is available under the [MIT License](LICENSE).
-
----
-
-<p align="center">
-  If AI Usage saves you a trip to the usage page, a
-  <a href="https://github.com/burakgon/ai-usage-menubar/stargazers">star</a>
-  helps other developers find it.
-</p>
-
-<p align="center">
-  <a href="https://star-history.com/#burakgon/ai-usage-menubar&Date">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=burakgon/ai-usage-menubar&type=Date&theme=dark">
-      <img src="https://api.star-history.com/svg?repos=burakgon/ai-usage-menubar&type=Date" width="600" alt="Star history of AI Usage">
-    </picture>
-  </a>
-</p>
+AI Usage is available under the [MIT License](LICENSE), which keeps the
+original copyright notice.
