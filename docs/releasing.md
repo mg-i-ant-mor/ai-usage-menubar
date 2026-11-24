@@ -13,20 +13,23 @@ releases never replace them.
 - The `ai-usage-menubar-mg` Sparkle EdDSA key in the login Keychain
 
 The Sparkle private key is never stored in this repository. The public key is
-embedded in `AIUsage/Info.plist`. Back up the private key in a secure secret
-manager (OpenBao) and restore it on another Mac with:
+embedded in `AIUsage/Info.plist`. A backup of the private key is in both
+OpenBao servers (`openbao` and `openbao-vps` on the tailnet), KV v2 at
+`secret/release/ai-usage-menubar/SPARKLE_PRIVATE_KEY`, field `value`.
+
+Restore it on another Mac after `bao login -method=oidc` (GitHub):
 
 ```bash
-generate_keys --account ai-usage-menubar-mg -x <exported-private-key-file>
+bao kv get -mount=secret -field=value release/ai-usage-menubar/SPARKLE_PRIVATE_KEY > key && generate_keys --account ai-usage-menubar-mg -f key && rm key
 ```
 
-```bash
-generate_keys --account ai-usage-menubar-mg -f <exported-private-key-file>
-```
+If the key ever changes, export it with
+`generate_keys --account ai-usage-menubar-mg -x <file>` and store it again on
+both servers with `bao kv put -mount=secret release/ai-usage-menubar/SPARKLE_PRIVATE_KEY value=@<file>`.
 
-The first command exports, the second imports. To sign without Keychain
-prompts, set `SPARKLE_PRIVATE_KEY_FILE` to the exported key file when
-packaging; the public key is still checked against Keychain.
+To sign without Keychain prompts, set `SPARKLE_PRIVATE_KEY_FILE` to an
+exported key file when packaging; the public key is still checked against
+Keychain.
 
 ## Versions
 
