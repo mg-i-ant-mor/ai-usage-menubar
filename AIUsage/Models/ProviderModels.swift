@@ -402,6 +402,45 @@ struct QuotaWindow: Identifiable, Equatable, Sendable {
         )
         return exhaustion < reset ? exhaustion : nil
     }
+
+    /// The share of the limit, in percent, that can be used each day from
+    /// `now` until the reset without running out. Plain arithmetic on the
+    /// current reading, not a forecast. `nil` for windows shorter than a day,
+    /// within a day of the reset, without a future reset, or when exhausted.
+    func dailyBudget(now: Date) -> Double? {
+        guard let reset = resetsAt, usedPercent < 100 else { return nil }
+        if let start = startsAt, reset.timeIntervalSince(start) < 86_400 { return nil }
+        let days = reset.timeIntervalSince(now) / 86_400
+        guard days >= 1 else { return nil }
+        return max(100 - usedPercent, 0) / days
+    }
+
+    /// The used percent that would land exactly on 100% at the reset: the
+    /// share of the window that has passed at `now`. With a `schedule`, a
+    /// window longer than a day counts working time only, like the forecast;
+    /// shorter windows always count calendar time. `nil` without a known
+    /// start and reset, or outside the window.
+    func onPacePercent(
+        now: Date,
+        schedule: WorkSchedule? = nil,
+        calendar: Calendar = .current
+    ) -> Double? {
+        guard let start = startsAt, let reset = resetsAt,
+              start <= now, now < reset else { return nil }
+        if let schedule, reset.timeIntervalSince(start) > 86_400 {
+            let total = schedule.workingTime(from: start, to: reset, calendar: calendar)
+            guard total > 0 else { return nil }
+            return schedule.workingTime(from: start, to: now, calendar: calendar) / total * 100
+        }
+        return now.timeIntervalSince(start) / reset.timeIntervalSince(start) * 100
+    }
+
+    /// `15`, or `1.9` under ten: the number part of `15%/day`.
+    static func budgetText(_ budget: Double) -> String {
+        (budget * 10).rounded() / 10 >= 10
+            ? "\(Int(budget.rounded()))"
+            : String(format: "%.1f", budget)
+    }
 }
 
 enum BillingUsage: Equatable, Sendable {

@@ -265,6 +265,8 @@ struct QuotaTimingPresentation: Equatable {
         }
         let resetText = CompactCountdown.text(until: reset, from: now)
             .map { "Reset \($0)" } ?? "Resetting"
+        let budget = window.dailyBudget(now: now).map(QuotaWindow.budgetText)
+        let spokenBudget = budget.map { "about \($0) percent a day until reset, " } ?? ""
         // Once the reset has passed, the reading predates it: no forecast.
         guard now < reset,
               let exhaustion = window.projectedExhaustion(
@@ -272,9 +274,9 @@ struct QuotaTimingPresentation: Equatable {
                   schedule: schedule
               ) else {
             isAtRisk = false
-            text = resetText
+            text = budget.map { "\($0)%/day · \(resetText)" } ?? resetText
             compactText = resetText
-            accessibilityText = resetText
+            accessibilityText = spokenBudget + resetText
             return
         }
         let full = CompactCountdown.text(until: exhaustion, from: now)
@@ -283,7 +285,16 @@ struct QuotaTimingPresentation: Equatable {
         let spokenFull = full.map { "full in \($0)" } ?? "full soon"
         compactText = fullText
         text = "\(fullText) · \(resetText)"
-        accessibilityText = "\(spokenFull) at this pace, \(resetText)"
+        // The tile keeps its risk line short; VoiceOver has room for the budget.
+        accessibilityText = "\(spokenFull) at this pace, \(spokenBudget)\(resetText)"
+    }
+}
+
+extension QuotaTimingPresentation {
+    /// VoiceOver's reading of the bar's on-pace mark, in the tile's mode.
+    static func onPaceText(_ onPace: Double, displayMode: UsageDisplayMode) -> String {
+        let value = Int(displayMode.displayedPercent(from: onPace).rounded())
+        return "on pace at \(value) percent \(displayMode.valueSuffix)"
     }
 }
 
@@ -439,6 +450,7 @@ private struct QuotaTile: View {
                 now: context.date,
                 schedule: workSchedule
             )
+            let onPace = window.onPacePercent(now: context.date, schedule: workSchedule)
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(window.kind.title)
@@ -470,6 +482,18 @@ private struct QuotaTile: View {
                                     )
                             )
                     }
+                    // Where the bar would be now to land on 100% at the reset:
+                    // a thin tick in the bar's color, taller than the bar. An
+                    // overlay, so its height never stretches the bar's layout.
+                    .overlay(alignment: .leading) {
+                        if let onPace {
+                            Capsule()
+                                .fill(progressTint)
+                                .frame(width: 1.5, height: 12)
+                                .offset(x: geometry.size.width *
+                                    displayMode.renderedFraction(from: onPace) - 0.75)
+                        }
+                    }
                 }
                 .frame(height: 4)
                 .accessibilityHidden(true)
@@ -499,7 +523,7 @@ private struct QuotaTile: View {
             .frame(maxWidth: .infinity, minHeight: 60, alignment: .topLeading)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(window.kind.title)
-            .accessibilityValue(accessibilityValue(timing))
+            .accessibilityValue(accessibilityValue(timing, onPace: onPace))
         }
     }
 
@@ -527,12 +551,12 @@ private struct QuotaTile: View {
         }
     }
 
-    private func accessibilityValue(_ timing: QuotaTimingPresentation) -> String {
+    private func accessibilityValue(_ timing: QuotaTimingPresentation, onPace: Double?) -> String {
         let usage = "\(percentText) \(displayMode.valueSuffix)"
-        guard let timingText = timing.accessibilityText else {
-            return usage
-        }
-        return "\(usage), \(timingText)"
+        return ([usage] + [
+            onPace.map { QuotaTimingPresentation.onPaceText($0, displayMode: displayMode) },
+            timing.accessibilityText
+        ].compactMap { $0 }).joined(separator: ", ")
     }
 }
 
