@@ -735,8 +735,8 @@ private struct ProviderWall: View {
     let store: UsageStore
 
     private let columns: [[ProviderID]] = [
-        [.claude, .antigravity, .devin, .grok, .kiro],
-        [.codex, .cursor, .copilot, .zai]
+        [.claude, .antigravity, .devin, .grok],
+        [.codex, .cursor, .copilot, .zai, .kiro]
     ]
 
     var body: some View {
@@ -747,9 +747,21 @@ private struct ProviderWall: View {
                         if let state = store.states[provider] {
                             ProviderSectionView(
                                 state: state,
-                                displayMode: .remaining
+                                displayMode: .remaining,
+                                accountName: state.snapshot?.accountName
                             )
                             .frame(width: 372)
+                            ForEach(state.snapshot?.otherAccounts ?? []) { account in
+                                ProviderSectionView(
+                                    state: ProviderState(
+                                        provider: provider,
+                                        snapshot: account.snapshot
+                                    ),
+                                    displayMode: .remaining,
+                                    accountName: account.name
+                                )
+                                .frame(width: 372)
+                            }
                         }
                     }
                 }
@@ -889,24 +901,33 @@ private enum ShowcaseData {
     }
 
     private static func snapshots(now: Date, detailed: Bool) -> [ProviderSnapshot] {
-        func window(_ kind: QuotaKind, used: Double, in seconds: TimeInterval?) -> QuotaWindow {
-            QuotaWindow(
-                kind: kind,
-                usedPercent: used,
-                resetsAt: seconds.map { now.addingTimeInterval($0) }
-            )
-        }
         let hour: TimeInterval = 3_600
         let day: TimeInterval = 86_400
+        // The window's length gives its start, which the forecast, the
+        // on-pace mark, and the daily budget need.
+        func window(
+            _ kind: QuotaKind,
+            used: Double,
+            in seconds: TimeInterval,
+            length: TimeInterval
+        ) -> QuotaWindow {
+            let reset = now.addingTimeInterval(seconds)
+            return QuotaWindow(
+                kind: kind,
+                usedPercent: used,
+                resetsAt: reset,
+                startsAt: reset.addingTimeInterval(-length)
+            )
+        }
 
-        return [
+        var snapshots = [
             ProviderSnapshot(
                 provider: .claude,
                 planName: "Max",
                 windows: [
-                    window(.session, used: 38, in: 1 * hour + 52 * 60),
-                    window(.weekly, used: 64, in: 2 * day + 19 * hour)
-                ] + (detailed ? [window(.fable, used: 21, in: 2 * day + 19 * hour)] : []),
+                    window(.session, used: 78, in: 1 * hour + 52 * 60, length: 5 * hour),
+                    window(.weekly, used: 64, in: 2 * day + 19 * hour, length: 7 * day)
+                ] + (detailed ? [window(.fable, used: 21, in: 2 * day + 19 * hour, length: 7 * day)] : []),
                 billingUsage: .boundedSpend(
                     usedAmount: 18.4,
                     limitAmount: 50,
@@ -922,8 +943,8 @@ private enum ShowcaseData {
                 provider: .codex,
                 planName: "Pro 200",
                 windows: [
-                    window(.session, used: 12, in: 3 * hour + 41 * 60),
-                    window(.weekly, used: 26, in: 5 * day + 2 * hour)
+                    window(.session, used: 12, in: 3 * hour + 41 * 60, length: 5 * hour),
+                    window(.weekly, used: 26, in: 5 * day + 2 * hour, length: 7 * day)
                 ],
                 resets: UsageResets(
                     availableCount: 3,
@@ -935,9 +956,9 @@ private enum ShowcaseData {
                 provider: .cursor,
                 planName: "Pro",
                 windows: [
-                    window(.totalUsage, used: 47, in: 12 * day),
-                    window(.autoUsage, used: 31, in: 12 * day),
-                    window(.apiUsage, used: 18, in: 12 * day)
+                    window(.totalUsage, used: 47, in: 12 * day, length: 30 * day),
+                    window(.autoUsage, used: 31, in: 12 * day, length: 30 * day),
+                    window(.apiUsage, used: 18, in: 12 * day, length: 30 * day)
                 ],
                 fetchedAt: now
             ),
@@ -945,10 +966,10 @@ private enum ShowcaseData {
                 provider: .antigravity,
                 planName: "Google AI Pro",
                 windows: [
-                    window(.session, used: 24, in: 3 * hour + 10 * 60),
-                    window(.weekly, used: 41, in: 4 * day + 7 * hour),
-                    window(.argonWeekly, used: 9, in: 4 * day + 7 * hour),
-                    window(.claudePool, used: 55, in: 2 * hour + 25 * 60)
+                    window(.session, used: 24, in: 3 * hour + 10 * 60, length: 5 * hour),
+                    window(.weekly, used: 41, in: 4 * day + 7 * hour, length: 7 * day),
+                    window(.argonWeekly, used: 9, in: 4 * day + 7 * hour, length: 7 * day),
+                    window(.claudePool, used: 45, in: 2 * hour + 25 * 60, length: 5 * hour)
                 ],
                 fetchedAt: now
             ),
@@ -956,9 +977,9 @@ private enum ShowcaseData {
                 provider: .copilot,
                 planName: "Individual Pro",
                 windows: [
-                    window(.credits, used: 33, in: 18 * day),
-                    window(.chat, used: 12, in: 18 * day),
-                    window(.completions, used: 4, in: 18 * day)
+                    window(.credits, used: 33, in: 18 * day, length: 30 * day),
+                    window(.chat, used: 12, in: 18 * day, length: 30 * day),
+                    window(.completions, used: 4, in: 18 * day, length: 30 * day)
                 ],
                 fetchedAt: now
             ),
@@ -966,8 +987,8 @@ private enum ShowcaseData {
                 provider: .devin,
                 planName: "Team",
                 windows: [
-                    window(.daily, used: 45, in: 9 * hour),
-                    window(.weekly, used: 72, in: 3 * day + 9 * hour)
+                    window(.daily, used: 45, in: 9 * hour, length: day),
+                    window(.weekly, used: 72, in: 3 * day + 9 * hour, length: 7 * day)
                 ],
                 fetchedAt: now
             ),
@@ -975,7 +996,7 @@ private enum ShowcaseData {
                 provider: .grok,
                 planName: "SuperGrok",
                 windows: [
-                    window(.weekly, used: 28, in: 6 * day + 3 * hour)
+                    window(.weekly, used: 28, in: 6 * day + 3 * hour, length: 7 * day)
                 ],
                 fetchedAt: now
             ),
@@ -983,7 +1004,7 @@ private enum ShowcaseData {
                 provider: .kiro,
                 planName: "Pro+",
                 windows: [
-                    window(.credits, used: 42, in: 23 * day)
+                    window(.credits, used: 42, in: 23 * day, length: 30 * day)
                 ],
                 fetchedAt: now
             ),
@@ -991,13 +1012,33 @@ private enum ShowcaseData {
                 provider: .zai,
                 planName: "Pro",
                 windows: [
-                    window(.session, used: 15, in: 4 * hour + 20 * 60),
-                    window(.weekly, used: 33, in: 5 * day + 11 * hour),
-                    window(.webSearches, used: 10, in: 21 * day)
+                    window(.session, used: 15, in: 4 * hour + 20 * 60, length: 5 * hour),
+                    window(.weekly, used: 33, in: 5 * day + 11 * hour, length: 7 * day),
+                    window(.webSearches, used: 10, in: 21 * day, length: 30 * day)
                 ],
                 fetchedAt: now
             )
         ]
+        // A second Claude account, kept in its own `CLAUDE_CONFIG_DIR`.
+        if detailed {
+            snapshots[0].accountName = "Personal"
+            snapshots[0].otherAccounts = [
+                ProviderAccount(
+                    id: "claude-work",
+                    name: "Work",
+                    snapshot: ProviderSnapshot(
+                        provider: .claude,
+                        planName: "Team",
+                        windows: [
+                            window(.session, used: 22, in: 4 * hour + 5 * 60, length: 5 * hour),
+                            window(.weekly, used: 47, in: 4 * day + 2 * hour, length: 7 * day)
+                        ],
+                        fetchedAt: now
+                    )
+                )
+            ]
+        }
+        return snapshots
     }
 }
 
