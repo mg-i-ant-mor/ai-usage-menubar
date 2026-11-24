@@ -265,6 +265,8 @@ struct QuotaTimingPresentation: Equatable {
         }
         let resetText = CompactCountdown.text(until: reset, from: now)
             .map { "Reset \($0)" } ?? "Resetting"
+        let budget = window.dailyBudget(now: now).map(QuotaWindow.budgetText)
+        let spokenBudget = budget.map { "about \($0) percent a day until reset, " } ?? ""
         // Once the reset has passed, the reading predates it: no forecast.
         guard now < reset,
               let exhaustion = window.projectedExhaustion(
@@ -272,9 +274,9 @@ struct QuotaTimingPresentation: Equatable {
                   schedule: schedule
               ) else {
             isAtRisk = false
-            text = resetText
+            text = budget.map { "\($0)%/day · \(resetText)" } ?? resetText
             compactText = resetText
-            accessibilityText = resetText
+            accessibilityText = spokenBudget + resetText
             return
         }
         let full = CompactCountdown.text(until: exhaustion, from: now)
@@ -283,7 +285,8 @@ struct QuotaTimingPresentation: Equatable {
         let spokenFull = full.map { "full in \($0)" } ?? "full soon"
         compactText = fullText
         text = "\(fullText) · \(resetText)"
-        accessibilityText = "\(spokenFull) at this pace, \(resetText)"
+        // The tile keeps its risk line short; VoiceOver has room for the budget.
+        accessibilityText = "\(spokenFull) at this pace, \(spokenBudget)\(resetText)"
     }
 }
 

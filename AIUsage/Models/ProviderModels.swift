@@ -402,6 +402,25 @@ struct QuotaWindow: Identifiable, Equatable, Sendable {
         )
         return exhaustion < reset ? exhaustion : nil
     }
+
+    /// The share of the limit, in percent, that can be used each day from
+    /// `now` until the reset without running out. Plain arithmetic on the
+    /// current reading, not a forecast. `nil` for windows shorter than a day,
+    /// within a day of the reset, without a future reset, or when exhausted.
+    func dailyBudget(now: Date) -> Double? {
+        guard let reset = resetsAt, usedPercent < 100 else { return nil }
+        if let start = startsAt, reset.timeIntervalSince(start) < 86_400 { return nil }
+        let days = reset.timeIntervalSince(now) / 86_400
+        guard days >= 1 else { return nil }
+        return max(100 - usedPercent, 0) / days
+    }
+
+    /// `15`, or `1.9` under ten: the number part of `15%/day`.
+    static func budgetText(_ budget: Double) -> String {
+        (budget * 10).rounded() / 10 >= 10
+            ? "\(Int(budget.rounded()))"
+            : String(format: "%.1f", budget)
+    }
 }
 
 enum BillingUsage: Equatable, Sendable {
