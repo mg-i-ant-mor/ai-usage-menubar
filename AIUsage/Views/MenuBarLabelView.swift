@@ -116,9 +116,6 @@ enum MenuBarTooltip {
         } else if let exhaustsAt = reading.exhaustsAt {
             details.append("Full by \(time(exhaustsAt, now: now, calendar: calendar, locale: locale)) at this pace")
         }
-        if let budget = reading.dailyBudget {
-            details.append("About \(QuotaWindow.budgetText(budget))% a day")
-        }
         if let resetsAt = reading.resetsAt, resetsAt > now {
             details.append("Resets \(time(resetsAt, now: now, calendar: calendar, locale: locale))")
         }

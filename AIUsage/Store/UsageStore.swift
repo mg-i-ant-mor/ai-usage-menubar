@@ -12,8 +12,6 @@ struct MenuBarReading: Equatable, Sendable {
     let resetsAt: Date?
     /// When the window fills at its current pace, if before `resetsAt`.
     let exhaustsAt: Date?
-    /// Percent a day that can be used until the reset, as `dailyBudget` reads it.
-    let dailyBudget: Double?
 
     init(
         provider: ProviderID,
@@ -23,8 +21,7 @@ struct MenuBarReading: Equatable, Sendable {
         isStale: Bool,
         isAtRisk: Bool = false,
         resetsAt: Date? = nil,
-        exhaustsAt: Date? = nil,
-        dailyBudget: Double? = nil
+        exhaustsAt: Date? = nil
     ) {
         self.provider = provider
         self.metric = metric
@@ -34,7 +31,6 @@ struct MenuBarReading: Equatable, Sendable {
         self.isAtRisk = isAtRisk
         self.resetsAt = resetsAt
         self.exhaustsAt = exhaustsAt
-        self.dailyBudget = dailyBudget
     }
 }
 
@@ -295,7 +291,6 @@ final class UsageStore {
                 now: now,
                 schedule: workSchedule
             )
-            let window = state.snapshot?.window(for: item.metric)
             return MenuBarReading(
                 provider: item.provider,
                 metric: item.metric,
@@ -303,9 +298,8 @@ final class UsageStore {
                 displayMode: displayMode,
                 isStale: state.isStale,
                 isAtRisk: exhaustion != nil,
-                resetsAt: window?.resetsAt,
-                exhaustsAt: exhaustion,
-                dailyBudget: window?.dailyBudget(now: now)
+                resetsAt: state.snapshot?.window(for: item.metric)?.resetsAt,
+                exhaustsAt: exhaustion
             )
         }
     }

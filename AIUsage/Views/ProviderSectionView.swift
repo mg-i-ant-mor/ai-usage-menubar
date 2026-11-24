@@ -290,6 +290,14 @@ struct QuotaTimingPresentation: Equatable {
     }
 }
 
+extension QuotaTimingPresentation {
+    /// VoiceOver's reading of the bar's on-pace mark, in the tile's mode.
+    static func onPaceText(_ onPace: Double, displayMode: UsageDisplayMode) -> String {
+        let value = Int(displayMode.displayedPercent(from: onPace).rounded())
+        return "on pace at \(value) percent \(displayMode.valueSuffix)"
+    }
+}
+
 struct ResetsPresentation: Equatable {
     static let expiringSoonInterval: TimeInterval = 24 * 60 * 60
 
@@ -442,6 +450,7 @@ private struct QuotaTile: View {
                 now: context.date,
                 schedule: workSchedule
             )
+            let onPace = window.onPacePercent(now: context.date, schedule: workSchedule)
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(window.kind.title)
@@ -473,6 +482,18 @@ private struct QuotaTile: View {
                                     )
                             )
                     }
+                    // Where the bar would be now to land on 100% at the reset:
+                    // a thin tick in the bar's color, taller than the bar. An
+                    // overlay, so its height never stretches the bar's layout.
+                    .overlay(alignment: .leading) {
+                        if let onPace {
+                            Capsule()
+                                .fill(progressTint)
+                                .frame(width: 1.5, height: 12)
+                                .offset(x: geometry.size.width *
+                                    displayMode.renderedFraction(from: onPace) - 0.75)
+                        }
+                    }
                 }
                 .frame(height: 4)
                 .accessibilityHidden(true)
@@ -502,7 +523,7 @@ private struct QuotaTile: View {
             .frame(maxWidth: .infinity, minHeight: 60, alignment: .topLeading)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(window.kind.title)
-            .accessibilityValue(accessibilityValue(timing))
+            .accessibilityValue(accessibilityValue(timing, onPace: onPace))
         }
     }
 
@@ -530,12 +551,12 @@ private struct QuotaTile: View {
         }
     }
 
-    private func accessibilityValue(_ timing: QuotaTimingPresentation) -> String {
+    private func accessibilityValue(_ timing: QuotaTimingPresentation, onPace: Double?) -> String {
         let usage = "\(percentText) \(displayMode.valueSuffix)"
-        guard let timingText = timing.accessibilityText else {
-            return usage
-        }
-        return "\(usage), \(timingText)"
+        return ([usage] + [
+            onPace.map { QuotaTimingPresentation.onPaceText($0, displayMode: displayMode) },
+            timing.accessibilityText
+        ].compactMap { $0 }).joined(separator: ", ")
     }
 }
 

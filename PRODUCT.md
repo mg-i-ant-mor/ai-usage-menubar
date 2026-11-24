@@ -66,14 +66,19 @@ database, or background transcript scanning.
   working-hours setting (off by default) measures windows longer than a day
   in working time, so nights and days off neither slow the pace nor count as
   time left.
+- A quota window with a known start and reset shows an on-pace mark on its
+  bar: the share of the window that has passed, which is where usage would be
+  to reach 100% exactly at the reset. Windows of a day or less use calendar
+  time; longer windows use working time when the working-hours setting is on.
+  VoiceOver reads it in the tile's Left or Used mode.
 - A quota window of a day or longer shows a daily budget: the percent left
-  divided by the days until its reset, on its card's reset line, in the
-  menu-bar tooltip, and to VoiceOver. It is plain arithmetic on the current
+  divided by the days until its reset, on its card's reset line and to
+  VoiceOver. It is plain arithmetic on the current
   reading, the same in Left and Used mode, with no color, history, alerts, or
   settings. It is hidden within 24 hours of the reset, without a future reset,
   and once the window is used up. When the window is on pace to run out
-  first, the card keeps its shorter risk line and only the tooltip and
-  VoiceOver add the budget.
+  first, the card keeps its shorter risk line and only VoiceOver adds the
+  budget.
 - Automatic menu-bar selection compares the selected primary period across
   available providers. A pinned provider may fall back to its other primary
   period when the selected one is absent, but never to a Spark-specific quota.

@@ -108,72 +108,51 @@ final class DailyBudgetTests: XCTestCase {
         )
     }
 
-    // MARK: Tooltip
+    // MARK: On-pace mark
 
-    func testTooltipAddsBudgetToTheDetailLine() {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        let groups = [MenuBarProviderReadings(
-            provider: .claude,
-            selectedMetrics: [.weekly, .sonnet],
-            readings: [
-                MenuBarReading(
-                    provider: .claude, metric: .weekly, value: .percentage(88),
-                    displayMode: .used, isStale: false,
-                    resetsAt: now.addingTimeInterval(day + 23 * hour),
-                    dailyBudget: 12 / (47.0 / 24)
-                ),
-                MenuBarReading(
-                    provider: .claude, metric: .sonnet, value: .percentage(60),
-                    displayMode: .used, isStale: false, isAtRisk: true,
-                    resetsAt: now.addingTimeInterval(3 * day + 17 * hour),
-                    exhaustsAt: now.addingTimeInterval(2 * day + 4 * hour),
-                    dailyBudget: 40 / (89.0 / 24)
-                )
-            ]
-        )]
-
-        XCTAssertEqual(MenuBarTooltip.text(
-            for: groups,
-            now: now,
-            calendar: calendar,
-            locale: Locale(identifier: "en_GB")
-        ), """
-        Claude Code
-        🔴 Weekly — 88% used
-              About 6.1% a day · Resets Sun 07:00
-        ⏳ Sonnet — 60% used
-              Full by Sun 12:00 at this pace · About 11% a day · Resets Tue 01:00
-        """)
+    func testSessionMarkIsTheShareOfTheWindowPassed() {
+        let session = QuotaWindow(
+            kind: .session, usedPercent: 15,
+            resetsAt: now.addingTimeInterval(3 * hour),
+            startsAt: now.addingTimeInterval(-2 * hour)
+        )
+        XCTAssertEqual(session.onPacePercent(now: now) ?? -1, 40, accuracy: 0.001)
+        // Sessions ignore working hours.
+        XCTAssertEqual(session.onPacePercent(now: now, schedule: .standard) ?? -1, 40, accuracy: 0.001)
     }
 
-    // MARK: Store
-
-    @MainActor
-    func testReadingsCarryTheSameBudgetInLeftAndUsedModes() async {
-        let snapshot = ProviderSnapshot(
-            provider: .claude,
-            planName: "Pro",
-            windows: [QuotaWindow(
-                kind: .weekly,
-                usedPercent: 40,
-                resetsAt: Date().addingTimeInterval(10 * day)
-            )],
-            fetchedAt: Date()
+    func testWeeklyMarkCountsWorkingTimeWithASchedule() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        // Mon 18 Jan 08:00 to Mon 25 Jan 08:00; Wednesday 18:00 is 3 of 5
+        // working days, but 58 of 168 hours.
+        let week = QuotaWindow(
+            kind: .weekly, usedPercent: 30,
+            resetsAt: ProviderParsing.date("2027-01-25T08:00:00Z"),
+            startsAt: ProviderParsing.date("2027-01-18T08:00:00Z")
         )
-        let store = UsageStore(
-            providers: [SequencedProvider(id: .claude, results: [.success(snapshot)])],
-            availabilityChecker: FixedProviderAvailabilityChecker(installed: [.claude])
+        let wednesday = ProviderParsing.date("2027-01-20T18:00:00Z")!
+        XCTAssertEqual(
+            week.onPacePercent(now: wednesday, schedule: .standard, calendar: calendar) ?? -1,
+            60, accuracy: 0.001
         )
-        await store.refresh()
-        let configuration = MenuBarProviderConfiguration(provider: .claude, metrics: [.weekly])
+        XCTAssertEqual(week.onPacePercent(now: wednesday) ?? -1, 58.0 / 168 * 100, accuracy: 0.001)
+    }
 
-        let budgets = [UsageDisplayMode.used, .remaining].map {
-            store.menuBarProviderReadings(for: [configuration], displayMode: $0)
-                .first?.readings.first?.dailyBudget
-        }
-        // Each read takes its own `now`, so allow for the moments between them.
-        XCTAssertEqual(budgets[0] ?? 0, 6, accuracy: 0.01)
-        XCTAssertEqual(budgets[1] ?? 0, budgets[0] ?? -1, accuracy: 0.0001)
+    func testNoMarkWithoutAKnownWindow() {
+        XCTAssertNil(weekly(used: 30, resetIn: 3 * day).onPacePercent(now: now))
+        let past = weekly(used: 30, resetIn: -hour, startsBeforeReset: 7 * day)
+        XCTAssertNil(past.onPacePercent(now: now))
+    }
+
+    func testMarkIsReadInTheTilesMode() {
+        XCTAssertEqual(
+            QuotaTimingPresentation.onPaceText(40, displayMode: .used),
+            "on pace at 40 percent used"
+        )
+        XCTAssertEqual(
+            QuotaTimingPresentation.onPaceText(40, displayMode: .remaining),
+            "on pace at 60 percent left"
+        )
     }
 }

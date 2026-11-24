@@ -120,10 +120,13 @@ time.
   current reading, so nothing is stored between refreshes. Turn on
   **Working hours only** in Settings to measure weekly and monthly limits in
   your working days and hours, so nights and weekends don't skew the pace.
+- A thin mark on each bar shows where usage would be now to reach the limit
+  exactly at its reset. Past the mark you're ahead of pace. Sessions always
+  measure it in clock time; with **Working hours only**, weekly and monthly
+  limits measure it in your working time.
 - Limits that last a day or more, such as weekly and monthly ones, show how
   much you can use each day until they reset without running out, as in
-  `6.1%/day · Reset 1d 23h` on the card and `About 6.1% a day` in the menu
-  bar's tooltip. It's the share left divided by the days left, so it isn't
+  `6.1%/day · Reset 1d 23h` on the card. It's the share left divided by the days left, so it isn't
   shown in the last 24 hours before a reset or once a limit is used up.
 - Percentages are shown exactly as the provider reports them. Only the bars are
   clamped to `0...100`, and a remaining percentage never goes below zero.

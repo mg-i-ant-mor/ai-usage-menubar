@@ -415,6 +415,26 @@ struct QuotaWindow: Identifiable, Equatable, Sendable {
         return max(100 - usedPercent, 0) / days
     }
 
+    /// The used percent that would land exactly on 100% at the reset: the
+    /// share of the window that has passed at `now`. With a `schedule`, a
+    /// window longer than a day counts working time only, like the forecast;
+    /// shorter windows always count calendar time. `nil` without a known
+    /// start and reset, or outside the window.
+    func onPacePercent(
+        now: Date,
+        schedule: WorkSchedule? = nil,
+        calendar: Calendar = .current
+    ) -> Double? {
+        guard let start = startsAt, let reset = resetsAt,
+              start <= now, now < reset else { return nil }
+        if let schedule, reset.timeIntervalSince(start) > 86_400 {
+            let total = schedule.workingTime(from: start, to: reset, calendar: calendar)
+            guard total > 0 else { return nil }
+            return schedule.workingTime(from: start, to: now, calendar: calendar) / total * 100
+        }
+        return now.timeIntervalSince(start) / reset.timeIntervalSince(start) * 100
+    }
+
     /// `15`, or `1.9` under ten: the number part of `15%/day`.
     static func budgetText(_ budget: Double) -> String {
         (budget * 10).rounded() / 10 >= 10
