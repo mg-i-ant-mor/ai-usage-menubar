@@ -5,8 +5,11 @@ intentionally limited to quota windows that can be fetched from credentials
 the supported tools already store locally.
 
 The reference implementation was OpenUsage `v0.7.6`, its local language-server
-discovery from `v0.7.16`, and provider updates through commit
-`fdf7a234b76b6a71522880cc9ab5b38044471698`. These are undocumented provider
+discovery from `v0.7.16`, provider updates through commit
+`fdf7a234b76b6a71522880cc9ab5b38044471698`, and the Antigravity quota host
+order and client identity from commits
+`ee9815937de6d52ae490f2d8de2412fadc26916d` and
+`e1ffa5712d8aebcc310c598b8f6b7973ad724919`. These are undocumented provider
 endpoints and may change; fixture tests protect the currently known behavior.
 
 ## Claude Code
@@ -69,6 +72,9 @@ Refresh request:
 
 The access token is refreshed within five minutes of `expiresAt` (epoch
 milliseconds). A usage `401` or `403` causes at most one refresh and one retry.
+The exception is a `403` whose `error.details.error_code` is
+`oauth_not_allowed_for_organization`: the organization doesn't allow OAuth
+sign-ins, so the token is not refreshed and the card says why.
 `invalid_grant` means the session expired. A `429` honors `Retry-After`
 (seconds or HTTP date) up to an hour, and always waits at least the backoff:
 five minutes, doubling with each consecutive `429` up to an hour. The cooldown
@@ -151,7 +157,7 @@ causes at most one refresh and one retry.
 
 | Provider | Local credential source | First-party usage contract | Mapped metrics |
 | --- | --- | --- | --- |
-| Cursor | Cursor state SQLite database, then `cursor-access-token` and `cursor-refresh-token` Keychain items | `api2.cursor.sh` DashboardService Connect RPCs | Total, Auto, API, personal on-demand spend |
+| Cursor | Cursor state SQLite database while its login is readable, then the Cursor CLI's `cursor-access-token` and `cursor-refresh-token` Keychain items | `api2.cursor.sh` DashboardService Connect RPCs | Total, Auto, API, personal on-demand spend |
 | Antigravity | Keychain service `gemini`, account `antigravity` | Google Cloud Code quota summary, then a running Antigravity app or `agy` CLI | Gemini session/weekly, Argon weekly, Claude session/weekly |
 | GitHub Copilot | Copilot editor config, GitHub CLI config, then `gh:github.com` Keychain item | `api.github.com/copilot_internal/user` | Credits, Chat, Completions |
 | Devin | `~/.local/share/devin/credentials.toml`, then Devin state SQLite database | Codeium SeatManagement Connect RPC | Daily, Weekly |
@@ -163,7 +169,9 @@ Cursor, Antigravity, and Grok refresh expiring access tokens using the refresh
 credential already stored by the corresponding tool. Kiro does the same, but
 only with the client registration Kiro itself stored. Refreshed tokens are
 persisted only where necessary; Antigravity's derived access token is cached
-privately by AI Usage and bound to a hash of the current refresh credential.
+privately by AI Usage and bound to a hash of the current refresh credential,
+and an access token renewed from the Cursor CLI's login is kept in memory
+only, for as long as that refresh token is the stored one.
 
 Devin omits a zero `*QuotaRemainingPercent` in proto3 JSON, so a window with a
 reset time and no share is fully used. Grok answers `412` with "no personal
@@ -172,6 +180,28 @@ as `429` or as `403` with `x-ratelimit-remaining: 0` or `Retry-After`; those
 wait until `x-ratelimit-reset` instead of reporting a rejected token. Cursor's
 `spendLimitUsage` is shown as extra usage only for a personal limit or personal
 spend, never for a team's shared pool.
+
+### Cursor
+
+The editor keeps its login in `cursorAuth/accessToken` and
+`cursorAuth/refreshToken` of
+`~/Library/Application Support/Cursor/User/globalStorage/state.vscdb`. Cursor
+3.27 and later seal both values: `cursor-safe-storage:v1:` followed by
+ciphertext from Electron's safe storage, whose key is the `Cursor Safe Storage`
+Keychain item that only trusts Cursor. AI Usage does not open that item or
+decrypt the values. A sealed login is recognized by its prefix, is never used
+as a token or sent in a request, and nothing is written back beside it.
+
+The Cursor CLI keeps its own login in the `cursor-access-token` and
+`cursor-refresh-token` Keychain items after `agent login`. It is used when the
+editor's login is sealed or absent and, as before, when the editor is signed
+in to a free account and the CLI to a different one. Those items are only
+read: when the CLI's access token has expired, AI Usage renews one with the
+CLI's refresh token and keeps it in memory. Cursor's answer carries no new
+refresh token, so there is nothing to write back.
+With a sealed editor login and no CLI login, the card asks for `agent login`.
+An expired CLI session asks for the same, because signing in to the editor
+again does not renew it.
 
 ### Kiro
 
@@ -214,20 +244,28 @@ renew. A `429` honors `Retry-After`.
 
 ### Antigravity
 
-Cloud Code requests use the Antigravity client's own identity:
-`User-Agent: antigravity/2.24.0 (aidev_client; os_type=darwin; arch=arm64)`
-(`amd64` on Intel). With any other User-Agent, Google answers the quota summary
-without the Gemini group and `loadCodeAssist` without `paidTier`.
+Cloud Code requests use the Antigravity hub client's own identity:
+`User-Agent: antigravity/hub/2.24.0 (aidev_client; os_type=darwin; arch=arm64)`
+(`amd64` on Intel). Google answers by identity: other User-Agents get the quota
+summary without the Gemini group and `loadCodeAssist` without `paidTier`, and
+the IDE identity (`antigravity/2.24.0`) gets it without the Argon group.
 
 1. `POST /v1internal:loadCodeAssist` with
    `{"metadata":{"ideType":"ANTIGRAVITY","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}}`,
-   read at most hourly, supplies the plan (`paidTier.id` `g1-pro-tier`,
-   `g1-ultra-tier`, or `g1-ultra-lite-tier`, then the tier name) and
-   `cloudaicompanionProject`.
+   read at most hourly from `cloudcode-pa.googleapis.com`, then
+   `daily-cloudcode-pa.googleapis.com`, supplies the plan (`paidTier.id`
+   `g1-pro-tier`, `g1-ultra-tier`, or `g1-ultra-lite-tier`, then the tier
+   name) and `cloudaicompanionProject`.
 2. `POST /v1internal:retrieveUserQuotaSummary` with `{"project": …}` goes to
-   `cloudcode-pa.googleapis.com` first, then `daily-cloudcode-pa.googleapis.com`
-   unless production already returned all four shared pools. Buckets are merged
-   by id, first answer winning.
+   `daily-cloudcode-pa.googleapis.com` first, then `cloudcode-pa.googleapis.com`
+   unless the daily host already returned all four shared pools. The daily
+   host holds the counters the Antigravity tools show. Production can answer
+   for the same account with every window untouched (`remainingFraction: 1`
+   and a `resetTime` one whole window away), so it only supplies the pools the
+   daily host leaves out or declines to share. Buckets are merged by id, first
+   answer winning. When the daily host cannot be reached or answers `408`,
+   `429`, or a server error, production is not asked in its place: the read
+   fails as temporary and the last reading stays.
 
 `gemini-5h`, `gemini-weekly`, `3p-5h`, and `3p-weekly` map to Session, Weekly,
 Claude, and Claude Weekly. Argon Weekly is the single enabled weekly bucket of
@@ -273,9 +311,11 @@ login.
 
 Rotated credentials are persisted only to the source from which they were
 loaded. Claude compares the complete ordered credential generation before
-writing and again before publishing usage. Codex compares the exact source
-before writing. This prevents an in-flight refresh from overwriting a new CLI
-login.
+writing and again before publishing usage. When the generation changed, the
+credentials are reloaded once; a second change ends that refresh as a
+temporary failure without probing the logins loaded before it. Codex compares
+the exact source before writing. This prevents an in-flight refresh from
+overwriting a new CLI login.
 
 Temporary network failures, `429`, server errors, denied Antigravity quota, and
 invalid response shapes preserve the last-good in-memory snapshot and mark it

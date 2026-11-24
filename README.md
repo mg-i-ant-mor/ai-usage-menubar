@@ -59,7 +59,7 @@ your tools already have, so there is nothing to set up.
 | --- | --- | --- |
 | **Claude Code** | Session, weekly, Sonnet, and Fable limits, extra usage in your billing currency, banked resets | Claude Code's saved login |
 | **Codex** | Session, weekly, and Spark limits, credits, banked resets | Codex's ChatGPT login |
-| **Cursor** | Total, Auto, and API usage, on-demand spend | Cursor's login |
+| **Cursor** | Total, Auto, and API usage, on-demand spend | The Cursor CLI's login (`agent login`), or the editor's before Cursor 3.27 |
 | **Antigravity** | Gemini session and weekly limits, Argon, Claude pool | Antigravity's Google login, or the running app or `agy` |
 | **GitHub Copilot** | Credits, chat, and completions | Copilot's editor sign-in or the GitHub CLI |
 | **Devin** | Daily and weekly quota | Devin's login |
@@ -182,6 +182,17 @@ Sign in to Claude Code normally and AI Usage picks up that login.
 </details>
 
 <details>
+<summary><b>Cursor says its editor login is encrypted.</b></summary>
+
+Cursor 3.27 and later encrypt the editor's saved login with a key only Cursor
+can read, and AI Usage doesn't open another app's private storage. It reads the
+Cursor CLI's login instead: install the
+[Cursor CLI](https://cursor.com/docs/cli/installation) and run `agent login`
+once.
+
+</details>
+
+<details>
 <summary><b>Antigravity shows no quota.</b></summary>
 
 Google doesn't share the quota of some accounts. Open Antigravity or run `agy`,
@@ -238,10 +249,11 @@ as described in [SECURITY.md](SECURITY.md).
 
 Provider contracts and parts of the system-boundary implementation were adapted
 from [OpenUsage](https://github.com/robinebers/openusage), using stable tag
-`v0.7.6`, local language-server discovery from tag `v0.7.16`, and provider
-updates through commit `fdf7a234b76b6a71522880cc9ab5b38044471698`. See
-[NOTICE](NOTICE) for attribution. Provider names and marks belong to their
-owners and don't imply endorsement.
+`v0.7.6`, local language-server discovery from tag `v0.7.16`, provider
+updates through commit `fdf7a234b76b6a71522880cc9ab5b38044471698`, and the
+Antigravity quota host order and client identity from commits `ee98159` and
+`e1ffa57`. See [NOTICE](NOTICE) for attribution. Provider names and marks
+belong to their owners and don't imply endorsement.
 
 ## License
 
