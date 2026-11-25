@@ -1,0 +1,40 @@
+name: Upstream release watch
+
+# Ogni giorno controlla l'ultima release del progetto originale e apre una
+# issue nel fork quando compare una versione nuova, da importare.
+
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      UPSTREAM: burakgon/ai-usage-menubar
+    steps:
+      - name: Leggi l'ultima release upstream
+        id: upstream
+        run: |
+          TAG=$(gh release view --repo "$UPSTREAM" --json tagName --jq .tagName)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Apri una issue se la release non e' ancora segnalata
+        env:
+          TAG: ${{ steps.upstream.outputs.tag }}
+        run: |
+          TITLE="Nuova release upstream: $TAG"
+          if gh issue list --state all --limit 500 --json title --jq '.[].title' \
+               | grep -Fxq "$TITLE"; then
+            echo "Gia' segnalata: $TAG"
+            exit 0
+          fi
+          BODY=$(printf 'Il progetto originale ha pubblicato la release **%s**.\n\n- Release: https://github.com/%s/releases/tag/%s\n- Confronta con il fork e importa le modifiche che servono.' "$TAG" "$UPSTREAM" "$TAG")
+          gh issue create --title "$TITLE" --body "$BODY"
