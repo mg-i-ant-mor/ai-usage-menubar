@@ -364,9 +364,6 @@ struct QuotaWindow: Identifiable, Equatable, Sendable {
     /// When the window began, from the provider or its known length.
     var startsAt: Date? = nil
 
-    /// The share of a window that has to pass before its pace is trusted.
-    static let minimumElapsedFraction = 0.1
-
     var id: QuotaKind { kind }
     var renderedFraction: Double { min(max(usedPercent / 100, 0), 1) }
 
@@ -386,8 +383,7 @@ struct QuotaWindow: Identifiable, Equatable, Sendable {
 
         if let schedule, reset.timeIntervalSince(start) > 86_400 {
             let elapsed = schedule.workingTime(from: start, to: measuredAt, calendar: calendar)
-            let total = schedule.workingTime(from: start, to: reset, calendar: calendar)
-            guard elapsed > 0, elapsed >= total * Self.minimumElapsedFraction else { return nil }
+            guard elapsed > 0 else { return nil }
             let needed = (100 - usedPercent) * elapsed / usedPercent
             guard needed < schedule.workingTime(from: measuredAt, to: reset, calendar: calendar)
             else { return nil }
@@ -395,8 +391,6 @@ struct QuotaWindow: Identifiable, Equatable, Sendable {
         }
 
         let elapsed = measuredAt.timeIntervalSince(start)
-        guard elapsed >= reset.timeIntervalSince(start) * Self.minimumElapsedFraction
-        else { return nil }
         let exhaustion = measuredAt.addingTimeInterval(
             (100 - usedPercent) * elapsed / usedPercent
         )

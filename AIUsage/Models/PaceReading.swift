@@ -1,0 +1,68 @@
+import Foundation
+
+/// How far a window's usage runs ahead of its pace, weighted by how much of
+/// the window has passed, so an early lead counts for less than a late one.
+struct PaceReading: Equatable, Sendable {
+    enum Zone: Int, Comparable, Sendable {
+        case onTrack, ahead, farAhead
+
+        static func < (lhs: Zone, rhs: Zone) -> Bool { lhs.rawValue < rhs.rawValue }
+    }
+
+    /// Steepness `k` of the confidence curve.
+    static let confidenceRate = 8.0
+    /// Weighted points ahead of pace that leave "on track" (`m`); twice it is "far ahead".
+    static let margin = 5.0
+    /// Weighted points a zone is held past its entry threshold (`h`).
+    static let hysteresis = 5.0
+
+    let zone: Zone
+    /// `f`: 0 at 70% of the pace or less, 1 at the pace or more.
+    let levelWeight: Double
+    /// When the pace catches up with the usage; `nil` unless used% > elapsed%.
+    let coolsAt: Date?
+
+    /// `nil` without a known start and reset, or when `date` is outside the window.
+    init?(
+        window: QuotaWindow,
+        at date: Date,
+        previous: Zone?,
+        schedule: WorkSchedule?,
+        calendar: Calendar = .current
+    ) {
+        guard let elapsed = window.onPacePercent(now: date, schedule: schedule, calendar: calendar),
+              let start = window.startsAt, let reset = window.resetsAt else { return nil }
+        let delta = window.usedPercent - elapsed
+        let weighted = delta * Self.confidence(elapsed: elapsed / 100)
+
+        let m = Self.margin, h = Self.hysteresis
+        if weighted > 2 * m || (previous == .farAhead && weighted > 2 * m - h) { zone = .farAhead }
+        else if weighted > m || ((previous ?? .onTrack) >= .ahead && weighted > m - h) { zone = .ahead }
+        else { zone = .onTrack }
+
+        levelWeight = elapsed > 0 ? Self.smoothstep(0.7, 1.0, window.usedPercent / elapsed) : 1
+
+        if delta > 0 {
+            let cools: Date
+            if let schedule, reset.timeIntervalSince(start) > 86_400 {
+                let needed = delta / 100 * schedule.workingTime(from: start, to: reset, calendar: calendar)
+                cools = schedule.date(byAddingWorkingTime: needed, to: date, calendar: calendar) ?? reset
+            } else {
+                cools = date.addingTimeInterval(delta / 100 * reset.timeIntervalSince(start))
+            }
+            coolsAt = min(cools, reset)
+        } else {
+            coolsAt = nil
+        }
+    }
+
+    /// `1 − e^(−k·elapsed)`; `elapsed` is a 0…1 fraction of the window.
+    static func confidence(elapsed: Double) -> Double {
+        1 - exp(-confidenceRate * elapsed)
+    }
+
+    static func smoothstep(_ a: Double, _ b: Double, _ x: Double) -> Double {
+        let t = min(max((x - a) / (b - a), 0), 1)
+        return t * t * (3 - 2 * t)
+    }
+}

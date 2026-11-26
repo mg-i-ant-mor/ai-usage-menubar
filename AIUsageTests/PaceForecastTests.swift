@@ -33,9 +33,9 @@ final class PaceForecastTests: XCTestCase {
         XCTAssertNil(window.projectedExhaustion(measuredAt: t0.addingTimeInterval(hour)))
     }
 
-    func testNoProjectionBeforeTenPercentElapsed() {
-        let window = session(used: 30)
-        XCTAssertNil(window.projectedExhaustion(measuredAt: t0.addingTimeInterval(20 * 60)))
+    func testProjectsFromTheStartOfTheWindow() {
+        XCTAssertEqual(session(used: 30).projectedExhaustion(measuredAt: t0.addingTimeInterval(20 * 60)),
+                       t0.addingTimeInterval(4_000))
     }
 
     func testNoProjectionAtZeroUsage() {
