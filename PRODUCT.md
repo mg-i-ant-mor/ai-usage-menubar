@@ -64,8 +64,9 @@ database, or background transcript scanning.
   weighted by how much of the window has passed, so it counts from the first
   minute with no initial wait. The window is at risk, and marked with an
   hourglass in the panel and the menu bar, from 5 points ahead of pace; it
-  clears 5 points lower than it set, so it doesn't flicker. The hourglass is
-  orange when ahead and red when far ahead; a full window is red, not at risk.
+  clears 5 points lower than it set, so it doesn't flicker. In the panel the
+  hourglass is orange when ahead and red when far ahead; a full window is red,
+  not at risk.
   The projection is computed from the current reading, and the app keeps only
   each window's zone in memory between refreshes while it runs; no usage
   history is stored. When at risk, the tooltip also says when the window will
@@ -81,7 +82,7 @@ database, or background transcript scanning.
   setting is on. VoiceOver reads it in the tile's Left or Used mode.
 - Orange from 60% used and red from 85% fade toward the normal color while
   usage is under pace, and are full strength when it is at or over pace. At
-  100% a window is always red. The tooltip icons follow the same rule.
+  100% a window is always red. The tooltip icons switch rather than fade.
 - When Claude flags a window as high usage, the tile shows an information icon
   and the tooltip a "Claude: high usage" line. It never changes the risk or
   the colors.
