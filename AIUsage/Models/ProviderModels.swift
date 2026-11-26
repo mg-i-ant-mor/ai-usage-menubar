@@ -365,6 +365,9 @@ struct QuotaWindow: Identifiable, Equatable, Sendable {
     var startsAt: Date? = nil
     /// How far usage runs ahead of the pace; set by the store when it takes a snapshot.
     var pace: PaceReading? = nil
+    /// Claude's own `limits[].severity` flags this window, as of the reading.
+    /// Information only: never drives risk, zones or colours.
+    var providerHighUsage = false
 
     var id: QuotaKind { kind }
     var renderedFraction: Double { min(max(usedPercent / 100, 0), 1) }

@@ -16,6 +16,8 @@ struct MenuBarReading: Equatable, Sendable {
     let exhaustsAt: Date?
     /// When the window is back on pace if usage pauses; set only for at-risk readings.
     let coolsAt: Date?
+    /// Claude's own high-usage flag for this window; information only.
+    let providerHighUsage: Bool
 
     init(
         provider: ProviderID,
@@ -27,7 +29,8 @@ struct MenuBarReading: Equatable, Sendable {
         levelWeight: Double = 1,
         resetsAt: Date? = nil,
         exhaustsAt: Date? = nil,
-        coolsAt: Date? = nil
+        coolsAt: Date? = nil,
+        providerHighUsage: Bool = false
     ) {
         self.provider = provider
         self.metric = metric
@@ -39,6 +42,7 @@ struct MenuBarReading: Equatable, Sendable {
         self.resetsAt = resetsAt
         self.exhaustsAt = exhaustsAt
         self.coolsAt = coolsAt
+        self.providerHighUsage = providerHighUsage
     }
 }
 
@@ -319,7 +323,8 @@ final class UsageStore {
                 levelWeight: state.snapshot?.window(for: item.metric)?.pace?.levelWeight ?? 1,
                 resetsAt: state.snapshot?.window(for: item.metric)?.resetsAt,
                 exhaustsAt: exhaustion,
-                coolsAt: isAtRisk ? state.snapshot?.window(for: item.metric)?.pace?.coolsAt : nil
+                coolsAt: isAtRisk ? state.snapshot?.window(for: item.metric)?.pace?.coolsAt : nil,
+                providerHighUsage: state.snapshot?.window(for: item.metric)?.providerHighUsage ?? false
             )
         }
     }

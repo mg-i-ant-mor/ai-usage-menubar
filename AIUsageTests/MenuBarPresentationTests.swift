@@ -198,6 +198,34 @@ final class MenuBarPresentationTests: XCTestCase {
         """)
     }
 
+    func testTooltipShowsClaudeHighUsage() {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let text = MenuBarTooltip.text(
+            for: [MenuBarProviderReadings(
+                provider: .claude,
+                selectedMetrics: [.weekly],
+                readings: [MenuBarReading(
+                    provider: .claude, metric: .weekly, value: .percentage(76),
+                    displayMode: .used, isStale: false,
+                    resetsAt: t0.addingTimeInterval(4 * 86_400),
+                    providerHighUsage: true
+                )]
+            )],
+            now: t0,
+            calendar: calendar,
+            locale: Locale(identifier: "en_GB")
+        )
+
+        XCTAssertEqual(text, """
+        Claude Code
+        🟠 Weekly — 76% used
+              Resets Tue 08:00
+              Claude: high usage
+        """)
+    }
+
     func testTooltipWithoutProvidersNamesTheApp() {
         XCTAssertEqual(MenuBarTooltip.text(for: [], now: Date()), "AI Usage")
     }

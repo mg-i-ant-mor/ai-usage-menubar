@@ -189,6 +189,14 @@ final class PaceForecastTests: XCTestCase {
         XCTAssertNil(p.zone)
     }
 
+    func testHighUsageNeverChangesRisk() {
+        var window = session(used: 10)
+        window.providerHighUsage = true
+        window = window.withPace(at: t0.addingTimeInterval(hour), previous: nil, schedule: nil)
+        XCTAssertFalse(window.isAtRisk(now: m70))
+        XCTAssertEqual(window.pace?.zone, .onTrack)
+    }
+
     func testFullWindowIsNotAtRisk() {
         let window = session(used: 100).withPace(at: t0.addingTimeInterval(hour), previous: nil, schedule: nil)
         XCTAssertEqual(window.pace?.zone, .farAhead)

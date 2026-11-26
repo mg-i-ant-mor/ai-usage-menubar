@@ -127,9 +127,14 @@ enum MenuBarTooltip {
         }
 
         let title = "\(reading.isStale ? "⚠️" : icon) \(reading.metric.title) — \(value)"
-        return details.isEmpty
-            ? [title]
-            : [title, "      " + details.joined(separator: " · ")]
+        var lines = [title]
+        if !details.isEmpty {
+            lines.append("      " + details.joined(separator: " · "))
+        }
+        if reading.providerHighUsage {
+            lines.append("      Claude: high usage")
+        }
+        return lines
     }
 
     /// `11:00` today, `Tue 08:00` within a week, `3 Feb` after that.

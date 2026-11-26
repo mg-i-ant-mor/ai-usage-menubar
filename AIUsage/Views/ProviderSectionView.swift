@@ -461,6 +461,12 @@ private struct QuotaTile: View {
                     Text(window.kind.title)
                         .font(.caption.weight(.medium))
                         .lineLimit(1)
+                    if window.providerHighUsage {
+                        Image(systemName: "exclamationmark.circle")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .help("Claude: high usage")
+                    }
                     Spacer(minLength: 4)
                     HStack(alignment: .firstTextBaseline, spacing: 3) {
                         Text(percentText)
@@ -560,7 +566,8 @@ private struct QuotaTile: View {
         let usage = "\(percentText) \(displayMode.valueSuffix)"
         return ([usage] + [
             onPace.map { QuotaTimingPresentation.onPaceText($0, displayMode: displayMode) },
-            timing.accessibilityText
+            timing.accessibilityText,
+            window.providerHighUsage ? "Claude: high usage" : nil
         ].compactMap { $0 }).joined(separator: ", ")
     }
 }

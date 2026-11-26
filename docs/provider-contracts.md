@@ -57,6 +57,15 @@ Mapped fields:
 Every row reads `resets_at`, accepting ISO-8601 with variable fractions and no
 timezone (assumed UTC), epoch seconds, or epoch milliseconds.
 
+A `limits[]` row whose `severity` is a string other than `normal` flags its
+window as "Claude: high usage": `session` maps to Session, `weekly_all` to
+Weekly, and `weekly_scoped` to Sonnet or Fable when
+`scope.model.display_name` starts with that name, case-insensitively. A
+missing or non-string `severity` is no flag. The flag is information only: it
+shows a small icon on the tile and a tooltip line, and never drives risk, pace
+zones or colours. The `pace` and `indicator` fields on these rows are present
+but not read.
+
 A grant contributes `resets_left` resets until `ends_at`; a null `ends_at`
 never expires, and expired grants are not counted. `extra_usage` reports
 `used_credits` and `monthly_limit` in minor units of `currency` with
