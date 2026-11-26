@@ -66,3 +66,44 @@ struct PaceReading: Equatable, Sendable {
         return t * t * (3 - 2 * t)
     }
 }
+
+extension QuotaWindow {
+    func withPace(
+        at date: Date,
+        previous: PaceReading.Zone?,
+        schedule: WorkSchedule?,
+        calendar: Calendar = .current
+    ) -> QuotaWindow {
+        var window = self
+        window.pace = PaceReading(
+            window: self, at: date, previous: previous, schedule: schedule, calendar: calendar
+        )
+        return window
+    }
+}
+
+extension ProviderSnapshot {
+    /// Each window paced at `fetchedAt`, holding its zone from `previous`'s window of the same kind.
+    func paced(
+        previous: ProviderSnapshot?,
+        schedule: WorkSchedule?,
+        calendar: Calendar = .current
+    ) -> ProviderSnapshot {
+        var snapshot = self
+        snapshot.windows = windows.map { window in
+            window.withPace(
+                at: fetchedAt,
+                previous: previous?.windows.first { $0.kind == window.kind }?.pace?.zone,
+                schedule: schedule,
+                calendar: calendar
+            )
+        }
+        for index in snapshot.otherAccounts.indices {
+            let previousAccount = previous?.otherAccounts.first { $0.id == snapshot.otherAccounts[index].id }
+            snapshot.otherAccounts[index].snapshot = snapshot.otherAccounts[index].snapshot?.paced(
+                previous: previousAccount?.snapshot, schedule: schedule, calendar: calendar
+            )
+        }
+        return snapshot
+    }
+}

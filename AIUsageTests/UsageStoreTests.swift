@@ -97,12 +97,97 @@ final class UsageStoreTests: XCTestCase {
         await store.refresh()
 
         XCTAssertEqual(store.menuBarReading(for: item)?.isAtRisk, true)
-        XCTAssertEqual(store.menuBarReading(for: item, workSchedule: .standard)?.isAtRisk, false)
+        store.setWorkSchedule(.standard)
+        XCTAssertEqual(store.menuBarReading(for: item)?.isAtRisk, false)
         let configuration = MenuBarProviderConfiguration(provider: .claude, metrics: [.weekly])
         XCTAssertEqual(
-            store.menuBarProviderReadings(for: [configuration], workSchedule: .standard)
+            store.menuBarProviderReadings(for: [configuration])
                 .first?.readings.first?.isAtRisk,
             false
+        )
+    }
+
+    private func sessionSnapshot(
+        used: Double,
+        t0: Date,
+        hours: Double,
+        otherAccounts: [ProviderAccount] = []
+    ) -> ProviderSnapshot {
+        var snapshot = ProviderSnapshot(
+            provider: .claude,
+            planName: "Pro",
+            windows: [QuotaWindow(
+                kind: .session,
+                usedPercent: used,
+                resetsAt: t0.addingTimeInterval(5 * 3_600),
+                startsAt: t0
+            )],
+            fetchedAt: t0.addingTimeInterval(hours * 3_600)
+        )
+        snapshot.otherAccounts = otherAccounts
+        return snapshot
+    }
+
+    private func claudeStore(_ results: [ProviderSnapshot]) -> UsageStore {
+        UsageStore(
+            providers: [SequencedProvider(id: .claude, results: results.map { .success($0) })],
+            availabilityChecker: FixedProviderAvailabilityChecker(installed: [.claude])
+        )
+    }
+
+    private func zone(_ store: UsageStore) -> PaceReading.Zone? {
+        store.states[.claude]?.snapshot?.windows.first?.pace?.zone
+    }
+
+    func testStoreHoldsTheZoneAcrossRefreshes() async {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        let first = sessionSnapshot(used: 30, t0: t0, hours: 1)
+        let second = sessionSnapshot(used: 43, t0: t0, hours: 2)
+        let store = claudeStore([first, second])
+        await store.refresh()
+        XCTAssertEqual(zone(store), .ahead)
+        await store.refresh()
+        XCTAssertEqual(zone(store), .ahead)  // weighted 2.88, held
+
+        let fresh = claudeStore([second])
+        await fresh.refresh()
+        XCTAssertEqual(zone(fresh), .onTrack)
+    }
+
+    func testScheduleChangeRecomputesPaceWithoutRefetching() async {
+        let saturday = ProviderParsing.date("2027-01-23T12:00:00Z")!
+        let snapshot = ProviderSnapshot(
+            provider: .claude,
+            planName: "Pro",
+            windows: [QuotaWindow(
+                kind: .weekly,
+                usedPercent: 85,
+                resetsAt: ProviderParsing.date("2027-01-25T08:00:00Z"),
+                startsAt: ProviderParsing.date("2027-01-18T08:00:00Z")
+            )],
+            fetchedAt: saturday
+        )
+        let store = claudeStore([snapshot])
+        await store.refresh()
+        XCTAssertEqual(zone(store), .farAhead)
+        store.setWorkSchedule(.standard)
+        XCTAssertEqual(zone(store), .onTrack)
+    }
+
+    func testOtherAccountsGetTheirOwnPace() async {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        let work = ProviderAccount(
+            id: "work",
+            name: "Work",
+            snapshot: sessionSnapshot(used: 30, t0: t0, hours: 1)
+        )
+        let store = claudeStore([sessionSnapshot(used: 10, t0: t0, hours: 1, otherAccounts: [work])])
+        await store.refresh()
+        XCTAssertEqual(zone(store), .onTrack)
+        XCTAssertEqual(
+            store.states[.claude]?.snapshot?.otherAccounts.first?.snapshot?
+                .windows.first?.pace?.zone,
+            .ahead
         )
     }
 

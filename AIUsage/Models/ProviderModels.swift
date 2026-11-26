@@ -363,6 +363,8 @@ struct QuotaWindow: Identifiable, Equatable, Sendable {
     let resetsAt: Date?
     /// When the window began, from the provider or its known length.
     var startsAt: Date? = nil
+    /// How far usage runs ahead of the pace; set by the store when it takes a snapshot.
+    var pace: PaceReading? = nil
 
     var id: QuotaKind { kind }
     var renderedFraction: Double { min(max(usedPercent / 100, 0), 1) }
@@ -518,7 +520,7 @@ struct UsageResets: Equatable, Sendable {
 struct ProviderSnapshot: Equatable, Sendable {
     let provider: ProviderID
     let planName: String?
-    let windows: [QuotaWindow]
+    var windows: [QuotaWindow]
     let billingUsage: BillingUsage?
     let resets: UsageResets?
     let fetchedAt: Date

@@ -72,6 +72,7 @@ final class UsageStore {
     private(set) var lastAttemptAt: Date?
     private(set) var lastSuccessfulRefreshAt: Date?
     private(set) var refreshInterval: RefreshIntervalOption
+    private(set) var workSchedule: WorkSchedule?
 
     private let providers: [any UsageProvider]
     private let availabilityChecker: any ProviderAvailabilityChecking
@@ -96,12 +97,14 @@ final class UsageStore {
         availabilityChecker: any ProviderAvailabilityChecking =
             SystemProviderAvailabilityChecker(),
         refreshInterval: RefreshIntervalOption = .fiveMinutes,
-        trackedProviderIDs: Set<ProviderID> = Set(ProviderID.allCases)
+        trackedProviderIDs: Set<ProviderID> = Set(ProviderID.allCases),
+        workSchedule: WorkSchedule? = nil
     ) {
         self.providers = providers
         self.availabilityChecker = availabilityChecker
         self.refreshInterval = refreshInterval
         self.trackedProviderIDs = trackedProviderIDs
+        self.workSchedule = workSchedule
         states = Dictionary(uniqueKeysWithValues: ProviderID.allCases.map {
             ($0, ProviderState(provider: $0))
         })
@@ -145,6 +148,15 @@ final class UsageStore {
         guard cadenceTask != nil else { return }
         cadenceTask?.cancel()
         cadenceTask = makeCadenceTask(refreshImmediately: false)
+    }
+
+    func setWorkSchedule(_ schedule: WorkSchedule?) {
+        guard workSchedule != schedule else { return }
+        workSchedule = schedule
+        for provider in ProviderID.allCases {
+            guard let snapshot = states[provider]?.snapshot else { continue }
+            states[provider]?.snapshot = snapshot.paced(previous: snapshot, schedule: schedule)
+        }
     }
 
     func refreshNow() {
@@ -255,16 +267,14 @@ final class UsageStore {
 
     func menuBarReadings(
         for items: [MenuBarItemID],
-        displayMode: UsageDisplayMode = .used,
-        workSchedule: WorkSchedule? = nil
+        displayMode: UsageDisplayMode = .used
     ) -> [MenuBarReading] {
         items.compactMap { item in
             guard let state = states[item.provider] else { return nil }
             return readings(
                 for: [item],
                 in: state,
-                displayMode: displayMode,
-                workSchedule: workSchedule
+                displayMode: displayMode
             ).first
         }
     }
@@ -272,8 +282,7 @@ final class UsageStore {
     private func readings(
         for items: [MenuBarItemID],
         in state: ProviderState,
-        displayMode: UsageDisplayMode,
-        workSchedule: WorkSchedule?
+        displayMode: UsageDisplayMode
     ) -> [MenuBarReading] {
         let now = Date()
         return items.compactMap { item in
@@ -306,8 +315,7 @@ final class UsageStore {
 
     func menuBarProviderReadings(
         for configurations: [MenuBarProviderConfiguration],
-        displayMode: UsageDisplayMode = .used,
-        workSchedule: WorkSchedule? = nil
+        displayMode: UsageDisplayMode = .used
     ) -> [MenuBarProviderReadings] {
         configurations.flatMap { configuration -> [MenuBarProviderReadings] in
             guard trackedProviderIDs.contains(configuration.provider),
@@ -328,8 +336,7 @@ final class UsageStore {
                 var readings = self.readings(
                     for: items,
                     in: account.state,
-                    displayMode: displayMode,
-                    workSchedule: workSchedule
+                    displayMode: displayMode
                 )
                 // Selected metrics can vanish from the live snapshot (for
                 // example, Claude accounts without a five-hour window return
@@ -343,8 +350,7 @@ final class UsageStore {
                     readings = self.readings(
                         for: [fallback],
                         in: account.state,
-                        displayMode: displayMode,
-                        workSchedule: workSchedule
+                        displayMode: displayMode
                     )
                 }
                 return MenuBarProviderReadings(
@@ -360,13 +366,11 @@ final class UsageStore {
 
     func menuBarReading(
         for item: MenuBarItemID,
-        displayMode: UsageDisplayMode = .used,
-        workSchedule: WorkSchedule? = nil
+        displayMode: UsageDisplayMode = .used
     ) -> MenuBarReading? {
         menuBarReadings(
             for: [item],
-            displayMode: displayMode,
-            workSchedule: workSchedule
+            displayMode: displayMode
         ).first
     }
 
@@ -398,7 +402,7 @@ final class UsageStore {
             state.isRefreshing = false
             switch fetchResult.result {
             case .success(let snapshot):
-                state.snapshot = snapshot
+                state.snapshot = snapshot.paced(previous: state.snapshot, schedule: workSchedule)
                 state.failure = nil
                 successfulDates.append(snapshot.fetchedAt)
             case .failure(let failure):
