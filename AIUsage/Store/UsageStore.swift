@@ -14,6 +14,8 @@ struct MenuBarReading: Equatable, Sendable {
     let resetsAt: Date?
     /// When the window fills at its current pace, if before `resetsAt`.
     let exhaustsAt: Date?
+    /// When the window is back on pace if usage pauses; set only for at-risk readings.
+    let coolsAt: Date?
 
     init(
         provider: ProviderID,
@@ -24,7 +26,8 @@ struct MenuBarReading: Equatable, Sendable {
         isAtRisk: Bool = false,
         levelWeight: Double = 1,
         resetsAt: Date? = nil,
-        exhaustsAt: Date? = nil
+        exhaustsAt: Date? = nil,
+        coolsAt: Date? = nil
     ) {
         self.provider = provider
         self.metric = metric
@@ -35,6 +38,7 @@ struct MenuBarReading: Equatable, Sendable {
         self.levelWeight = levelWeight
         self.resetsAt = resetsAt
         self.exhaustsAt = exhaustsAt
+        self.coolsAt = coolsAt
     }
 }
 
@@ -304,16 +308,18 @@ final class UsageStore {
                 now: now,
                 schedule: workSchedule
             )
+            let isAtRisk = state.snapshot?.isAtRisk(item.metric, now: now) == true
             return MenuBarReading(
                 provider: item.provider,
                 metric: item.metric,
                 value: value,
                 displayMode: displayMode,
                 isStale: state.isStale,
-                isAtRisk: state.snapshot?.isAtRisk(item.metric, now: now) == true,
+                isAtRisk: isAtRisk,
                 levelWeight: state.snapshot?.window(for: item.metric)?.pace?.levelWeight ?? 1,
                 resetsAt: state.snapshot?.window(for: item.metric)?.resetsAt,
-                exhaustsAt: exhaustion
+                exhaustsAt: exhaustion,
+                coolsAt: isAtRisk ? state.snapshot?.window(for: item.metric)?.pace?.coolsAt : nil
             )
         }
     }

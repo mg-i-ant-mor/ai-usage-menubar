@@ -69,12 +69,14 @@ final class UsageStoreTests: XCTestCase {
         XCTAssertEqual(fast.menuBarReading(for: item)?.isAtRisk, true)
         XCTAssertEqual(fast.menuBarReading(for: item)?.resetsAt, t0.addingTimeInterval(5 * 3_600))
         XCTAssertEqual(fast.menuBarReading(for: item)?.exhaustsAt, t0.addingTimeInterval(2.5 * 3_600))
+        XCTAssertEqual(fast.menuBarReading(for: item)?.coolsAt, t0.addingTimeInterval(2 * 3_600))
         XCTAssertEqual(fast.menuBarReading(for: item)?.levelWeight, 1)
 
         let slow = store(used: 10)
         await slow.refresh()
         XCTAssertEqual(slow.menuBarReading(for: item)?.isAtRisk, false)
         XCTAssertNil(slow.menuBarReading(for: item)?.exhaustsAt)
+        XCTAssertNil(slow.menuBarReading(for: item)?.coolsAt)
         XCTAssertEqual(slow.menuBarReading(for: item)?.levelWeight, 0)
     }
 
