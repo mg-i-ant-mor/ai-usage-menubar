@@ -6,6 +6,27 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>AI Usage</title>
         <item>
+            <title>0.5.0.3</title>
+            <pubDate>Thu, 26 Nov 2026 20:59:04 +0100</pubDate>
+            <link>https://github.com/mg-i-ant-mor/ai-usage-menubar</link>
+            <sparkle:version>1003</sparkle:version>
+            <sparkle:shortVersionString>0.5.0.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[# AI Usage 0.5.0.3
+
+- Pace-aware risk: each limit window gets a confidence-weighted pace zone, and
+  the bar's on-pace tick, the panel hourglass and the menu bar mark risk by that
+  zone. Usage-level colours are muted while the pace is calm, and the panel says
+  when a window is back on pace.
+- The forecast no longer waits for 10% usage and survives stale readings.
+- Claude's own high-usage flag is shown as information, not as a warning.
+
+This build is signed ad-hoc and not notarized. The first time you open the
+downloaded DMG, right-click the app and choose Open.
+]]></description>
+            <enclosure url="https://github.com/mg-i-ant-mor/ai-usage-menubar/releases/download/v0.5.0.3/AI-Usage.dmg" length="4644867" type="application/octet-stream" sparkle:edSignature="mrcxrp6sHJFi/WvoHDGE8Qr4cSXsPqKBXfzW8zFHK/yjPnLet0FJTtRJ7Dd8Yr+nV1aD7Txeyb9GfqAohOXGDw=="/>
+        </item>
+        <item>
             <title>0.5.0.2</title>
             <pubDate>Tue, 24 Nov 2026 11:28:30 +0100</pubDate>
             <link>https://github.com/mg-i-ant-mor/ai-usage-menubar</link>
@@ -49,6 +70,6 @@ downloaded DMG, right-click the app and choose Open.
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: A/XKljuwaL5Yth7Co35wHeqO3u1l9aJgbowZZrrh9e3heovAlewVGDxB1KLc7rldFYbPqYZnAByufY05UrJUAQ==
-length: 2887
+edSignature: ZSBj0bOzXWGotBejzGwMPF5mW9grOq05OwVEq8GlOpJ4QP+SgRIsCBGyxWGY+iOSzHG7oY8SJLB+SXB3IOBbCQ==
+length: 4226
 -->
