@@ -80,10 +80,18 @@ extension QuotaWindow {
         )
         return window
     }
+
+    /// Running ahead of its pace, not yet full, with the reset still ahead of `now`.
+    func isAtRisk(now: Date) -> Bool {
+        guard let zone = pace?.zone, zone >= .ahead, usedPercent < 100,
+              let reset = resetsAt else { return false }
+        return now < reset
+    }
 }
 
 extension ProviderSnapshot {
-    /// Each window paced at `fetchedAt`, holding its zone from `previous`'s window of the same kind.
+    /// Each window paced at `fetchedAt`, holding its zone from `previous`'s window of the
+    /// same kind and reset; a rolled-over window starts fresh.
     func paced(
         previous: ProviderSnapshot?,
         schedule: WorkSchedule?,
@@ -93,7 +101,9 @@ extension ProviderSnapshot {
         snapshot.windows = windows.map { window in
             window.withPace(
                 at: fetchedAt,
-                previous: previous?.windows.first { $0.kind == window.kind }?.pace?.zone,
+                previous: previous?.windows.first {
+                    $0.kind == window.kind && $0.resetsAt == window.resetsAt
+                }?.pace?.zone,
                 schedule: schedule,
                 calendar: calendar
             )

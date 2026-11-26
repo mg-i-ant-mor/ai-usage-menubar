@@ -251,6 +251,8 @@ extension EnvironmentValues {
 /// when that comes first.
 struct QuotaTimingPresentation: Equatable {
     let isAtRisk: Bool
+    /// The window's pace zone while at risk, for the hourglass colour.
+    let zone: PaceReading.Zone?
     let text: String?
     let compactText: String?
     let accessibilityText: String?
@@ -258,6 +260,7 @@ struct QuotaTimingPresentation: Equatable {
     init(window: QuotaWindow, measuredAt: Date, now: Date, schedule: WorkSchedule? = nil) {
         guard let reset = window.resetsAt else {
             isAtRisk = false
+            zone = nil
             text = nil
             compactText = nil
             accessibilityText = nil
@@ -268,12 +271,13 @@ struct QuotaTimingPresentation: Equatable {
         let budget = window.dailyBudget(now: now).map(QuotaWindow.budgetText)
         let spokenBudget = budget.map { "about \($0) percent a day until reset, " } ?? ""
         // Once the reset has passed, the reading predates it: no forecast.
-        guard now < reset,
+        guard window.isAtRisk(now: now),
               let exhaustion = window.projectedExhaustion(
                   measuredAt: measuredAt,
                   schedule: schedule
               ) else {
             isAtRisk = false
+            zone = nil
             text = budget.map { "\($0)%/day · \(resetText)" } ?? resetText
             compactText = resetText
             accessibilityText = spokenBudget + resetText
@@ -281,6 +285,7 @@ struct QuotaTimingPresentation: Equatable {
         }
         let full = CompactCountdown.text(until: exhaustion, from: now)
         isAtRisk = true
+        zone = window.pace?.zone
         let fullText = full.map { "Full \($0)" } ?? "Full soon"
         let spokenFull = full.map { "full in \($0)" } ?? "full soon"
         compactText = fullText
@@ -483,12 +488,12 @@ private struct QuotaTile: View {
                             )
                     }
                     // Where the bar would be now to land on 100% at the reset:
-                    // a thin tick in the bar's color, taller than the bar. An
+                    // a thin tick in the zone colour, taller than the bar. An
                     // overlay, so its height never stretches the bar's layout.
                     .overlay(alignment: .leading) {
                         if let onPace {
                             Capsule()
-                                .fill(progressTint)
+                                .fill(UsagePalette.zoneTint(window.pace?.zone))
                                 .frame(width: 1.5, height: 12)
                                 .offset(x: geometry.size.width *
                                     displayMode.renderedFraction(from: onPace) - 0.75)
@@ -502,7 +507,7 @@ private struct QuotaTile: View {
                     HStack(spacing: 5) {
                         if timing.isAtRisk {
                             Image(systemName: "hourglass")
-                                .foregroundStyle(UsagePalette.warning)
+                                .foregroundStyle(UsagePalette.zoneTint(timing.zone))
                         } else {
                             Image(systemName: "clock")
                                 .foregroundStyle(.tertiary)

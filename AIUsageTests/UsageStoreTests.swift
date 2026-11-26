@@ -154,6 +154,18 @@ final class UsageStoreTests: XCTestCase {
         XCTAssertEqual(zone(fresh), .onTrack)
     }
 
+    func testRolledOverWindowStartsWithoutPreviousZone() async {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        let first = sessionSnapshot(used: 30, t0: t0, hours: 1)
+        // The next window: starts at the old reset, 6 minutes in at 3% (weighted ~0.15).
+        let next = sessionSnapshot(used: 3, t0: t0.addingTimeInterval(5 * 3_600), hours: 0.1)
+        let store = claudeStore([first, next])
+        await store.refresh()
+        XCTAssertEqual(zone(store), .ahead)
+        await store.refresh()
+        XCTAssertEqual(zone(store), .onTrack)  // a carried .ahead would hold above weighted 0
+    }
+
     func testScheduleChangeRecomputesPaceWithoutRefetching() async {
         let saturday = ProviderParsing.date("2027-01-23T12:00:00Z")!
         let snapshot = ProviderSnapshot(

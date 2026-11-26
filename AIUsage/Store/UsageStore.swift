@@ -306,7 +306,7 @@ final class UsageStore {
                 value: value,
                 displayMode: displayMode,
                 isStale: state.isStale,
-                isAtRisk: exhaustion != nil,
+                isAtRisk: state.snapshot?.isAtRisk(item.metric, now: now) == true,
                 resetsAt: state.snapshot?.window(for: item.metric)?.resetsAt,
                 exhaustsAt: exhaustion
             )
