@@ -107,15 +107,6 @@ final class WorkScheduleTests: XCTestCase {
         )
     }
 
-    func testWorkingHoursNeedTenPercentOfTheWindowsWorkingTime() {
-        let window = weekly(used: 10)
-        XCTAssertNil(window.projectedExhaustion(
-            measuredAt: date("2027-01-18T13:00:00Z"),
-            schedule: schedule,
-            calendar: calendar
-        ))
-    }
-
     func testWindowsOfADayOrLessIgnoreTheSchedule() {
         let saturday = date("2027-01-23T10:00:00Z")
         let session = QuotaWindow(

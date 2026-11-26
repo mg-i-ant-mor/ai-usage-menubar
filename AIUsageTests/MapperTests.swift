@@ -53,6 +53,63 @@ final class MapperTests: XCTestCase {
         }
     }
 
+    private func mapClaude(_ json: String) throws -> ProviderSnapshot {
+        try ClaudeUsageMapper.map(
+            response: httpResponse(json: json),
+            credentials: ClaudeOAuth(
+                accessToken: "token",
+                refreshToken: "refresh",
+                expiresAt: nil,
+                subscriptionType: "pro",
+                rateLimitTier: nil,
+                scopes: ["user:profile"]
+            ),
+            now: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+    }
+
+    func testClaudeReadsServerSeverity() throws {
+        let snapshot = try mapClaude("""
+        {
+          "five_hour": {"utilization": 10, "resets_at": 1800014400},
+          "seven_day": {"utilization": 10, "resets_at": 1800518400},
+          "seven_day_sonnet": {"utilization": 10, "resets_at": 1800518400},
+          "limits": [
+            {"kind": "session", "group": "session", "percent": 10, "severity": "normal"},
+            {"kind": "weekly_all", "group": "weekly", "percent": 10, "severity": "warning"},
+            {"kind": "weekly_scoped", "scope": {"model": {"display_name": "Sonnet"}}, "percent": 10, "severity": "normal"},
+            {"kind": "weekly_scoped", "scope": {"model": {"display_name": "Fable"}}, "percent": 10,
+             "severity": "critical", "resets_at": 1800518400}
+          ]
+        }
+        """)
+        XCTAssertEqual(snapshot.windows.map(\.kind), [.session, .weekly, .sonnet, .fable])
+        XCTAssertEqual(snapshot.windows.map(\.providerHighUsage), [false, true, false, true])
+    }
+
+    func testClaudeWithoutSeverityHasNoWarning() throws {
+        let snapshot = try mapClaude("""
+        {
+          "five_hour": {"utilization": 10, "resets_at": 1800014400},
+          "seven_day": {"utilization": 10, "resets_at": 1800518400},
+          "limits": [
+            {"kind": "session", "percent": 10},
+            {"kind": "weekly_all", "percent": 10, "severity": 3},
+            {"kind": "daily", "percent": 10, "severity": "warning"}
+          ]
+        }
+        """)
+        XCTAssertEqual(snapshot.windows.map(\.providerHighUsage), [false, false])
+
+        let noLimits = try mapClaude("""
+        {
+          "five_hour": {"utilization": 10, "resets_at": 1800014400},
+          "seven_day": {"utilization": 10, "resets_at": 1800518400}
+        }
+        """)
+        XCTAssertEqual(noLimits.windows.map(\.providerHighUsage), [false, false])
+    }
+
     func testCodexClassifiesWeeklyInPrimaryAndMapsSpark() throws {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let response = httpResponse(json: """

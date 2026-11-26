@@ -66,6 +66,72 @@ final class MenuBarPresentationTests: XCTestCase {
         )
     }
 
+    func testStaleReadingStillShowsItsForecast() {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let groups = [MenuBarProviderReadings(
+            provider: .claude,
+            selectedMetrics: [.session],
+            readings: [MenuBarReading(
+                provider: .claude, metric: .session, value: .percentage(66),
+                displayMode: .used, isStale: true, isAtRisk: true,
+                resetsAt: t0.addingTimeInterval(3 * 3_600),
+                exhaustsAt: t0.addingTimeInterval(80 * 60),
+                coolsAt: t0.addingTimeInterval(2 * 3_600)
+            )]
+        )]
+
+        let text = MenuBarTooltip.text(
+            for: groups,
+            now: t0,
+            calendar: calendar,
+            locale: Locale(identifier: "en_GB")
+        )
+
+        XCTAssertEqual(text, """
+        Claude Code
+        ⚠️ Session — 66% used
+              Not updated · Full by 09:20 at this pace · Back on pace by 10:00 if you pause · Resets 11:00
+        """)
+    }
+
+    func testTooltipSkipsForecastTimesAlreadyPast() {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        func text(coolsAt: TimeInterval) -> String {
+            MenuBarTooltip.text(
+                for: [MenuBarProviderReadings(
+                    provider: .claude,
+                    selectedMetrics: [.session],
+                    readings: [MenuBarReading(
+                        provider: .claude, metric: .session, value: .percentage(66),
+                        displayMode: .used, isStale: true, isAtRisk: true,
+                        resetsAt: t0.addingTimeInterval(3 * 3_600),
+                        exhaustsAt: t0.addingTimeInterval(-600),
+                        coolsAt: t0.addingTimeInterval(coolsAt)
+                    )]
+                )],
+                now: t0,
+                calendar: calendar,
+                locale: Locale(identifier: "en_GB")
+            )
+        }
+
+        XCTAssertEqual(text(coolsAt: -300), """
+        Claude Code
+        ⚠️ Session — 66% used
+              Not updated · Resets 11:00
+        """)
+        // Cooling exactly at the reset adds nothing the reset doesn't already say.
+        XCTAssertEqual(text(coolsAt: 3 * 3_600), """
+        Claude Code
+        ⚠️ Session — 66% used
+              Not updated · Resets 11:00
+        """)
+    }
+
     func testTooltipListsEachLimitWithItsTimesAndStatus() {
         let t0 = Date(timeIntervalSince1970: 1_800_000_000) // Fri 15 Jan 2027 08:00 UTC
         var calendar = Calendar(identifier: .gregorian)
@@ -79,7 +145,8 @@ final class MenuBarPresentationTests: XCTestCase {
                         provider: .claude, metric: .session, value: .percentage(66),
                         displayMode: .used, isStale: false, isAtRisk: true,
                         resetsAt: t0.addingTimeInterval(3 * 3_600),
-                        exhaustsAt: t0.addingTimeInterval(80 * 60)
+                        exhaustsAt: t0.addingTimeInterval(80 * 60),
+                        coolsAt: t0.addingTimeInterval(2 * 3_600)
                     ),
                     MenuBarReading(
                         provider: .claude, metric: .weekly, value: .percentage(37),
@@ -118,7 +185,7 @@ final class MenuBarPresentationTests: XCTestCase {
         XCTAssertEqual(text, """
         Claude Code
         ⏳ Session — 66% used
-              Full by 09:20 at this pace · Resets 11:00
+              Full by 09:20 at this pace · Back on pace by 10:00 if you pause · Resets 11:00
         🟢 Weekly — 37% used
               Resets Tue 08:00
         🔴 Total Usage — 93% used
@@ -130,6 +197,68 @@ final class MenuBarPresentationTests: XCTestCase {
 
         Cursor
         No usage data
+        """)
+    }
+
+    func testTooltipMutesLevelIconsOnACalmPace() {
+        func reading(_ metric: MenuBarMetricID, _ percent: Double, _ weight: Double) -> MenuBarReading {
+            MenuBarReading(
+                provider: .claude, metric: metric, value: .percentage(percent),
+                displayMode: .used, isStale: false, levelWeight: weight
+            )
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let text = MenuBarTooltip.text(
+            for: [MenuBarProviderReadings(
+                provider: .claude,
+                selectedMetrics: [.session, .weekly, .sonnet, .fable],
+                readings: [
+                    reading(.session, 76, 0.4),
+                    reading(.weekly, 76, 0.6),
+                    reading(.sonnet, 90, 0.4),
+                    reading(.fable, 100, 0)
+                ]
+            )],
+            now: Date(timeIntervalSince1970: 1_800_000_000),
+            calendar: calendar,
+            locale: Locale(identifier: "en_GB")
+        )
+
+        XCTAssertEqual(text, """
+        Claude Code
+        🟢 Session — 76% used
+        🟠 Weekly — 76% used
+        🟢 Sonnet — 90% used
+        🔴 Fable — 100% used
+        """)
+    }
+
+    func testTooltipShowsClaudeHighUsage() {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let text = MenuBarTooltip.text(
+            for: [MenuBarProviderReadings(
+                provider: .claude,
+                selectedMetrics: [.weekly],
+                readings: [MenuBarReading(
+                    provider: .claude, metric: .weekly, value: .percentage(76),
+                    displayMode: .used, isStale: false,
+                    resetsAt: t0.addingTimeInterval(4 * 86_400),
+                    providerHighUsage: true
+                )]
+            )],
+            now: t0,
+            calendar: calendar,
+            locale: Locale(identifier: "en_GB")
+        )
+
+        XCTAssertEqual(text, """
+        Claude Code
+        🟠 Weekly — 76% used
+              Resets Tue 08:00
+              Claude: high usage
         """)
     }
 

@@ -251,6 +251,8 @@ extension EnvironmentValues {
 /// when that comes first.
 struct QuotaTimingPresentation: Equatable {
     let isAtRisk: Bool
+    /// The window's pace zone while at risk, for the hourglass colour.
+    let zone: PaceReading.Zone?
     let text: String?
     let compactText: String?
     let accessibilityText: String?
@@ -258,6 +260,7 @@ struct QuotaTimingPresentation: Equatable {
     init(window: QuotaWindow, measuredAt: Date, now: Date, schedule: WorkSchedule? = nil) {
         guard let reset = window.resetsAt else {
             isAtRisk = false
+            zone = nil
             text = nil
             compactText = nil
             accessibilityText = nil
@@ -268,12 +271,13 @@ struct QuotaTimingPresentation: Equatable {
         let budget = window.dailyBudget(now: now).map(QuotaWindow.budgetText)
         let spokenBudget = budget.map { "about \($0) percent a day until reset, " } ?? ""
         // Once the reset has passed, the reading predates it: no forecast.
-        guard now < reset,
+        guard window.isAtRisk(now: now),
               let exhaustion = window.projectedExhaustion(
                   measuredAt: measuredAt,
                   schedule: schedule
               ) else {
             isAtRisk = false
+            zone = nil
             text = budget.map { "\($0)%/day · \(resetText)" } ?? resetText
             compactText = resetText
             accessibilityText = spokenBudget + resetText
@@ -281,6 +285,7 @@ struct QuotaTimingPresentation: Equatable {
         }
         let full = CompactCountdown.text(until: exhaustion, from: now)
         isAtRisk = true
+        zone = window.pace?.zone
         let fullText = full.map { "Full \($0)" } ?? "Full soon"
         let spokenFull = full.map { "full in \($0)" } ?? "full soon"
         compactText = fullText
@@ -456,6 +461,12 @@ private struct QuotaTile: View {
                     Text(window.kind.title)
                         .font(.caption.weight(.medium))
                         .lineLimit(1)
+                    if window.providerHighUsage {
+                        Image(systemName: "exclamationmark.circle")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .help("Claude: high usage")
+                    }
                     Spacer(minLength: 4)
                     HStack(alignment: .firstTextBaseline, spacing: 3) {
                         Text(percentText)
@@ -483,12 +494,12 @@ private struct QuotaTile: View {
                             )
                     }
                     // Where the bar would be now to land on 100% at the reset:
-                    // a thin tick in the bar's color, taller than the bar. An
+                    // a thin tick in the zone colour, taller than the bar. An
                     // overlay, so its height never stretches the bar's layout.
                     .overlay(alignment: .leading) {
                         if let onPace {
                             Capsule()
-                                .fill(progressTint)
+                                .fill(UsagePalette.zoneTint(window.pace?.zone))
                                 .frame(width: 1.5, height: 12)
                                 .offset(x: geometry.size.width *
                                     displayMode.renderedFraction(from: onPace) - 0.75)
@@ -502,7 +513,7 @@ private struct QuotaTile: View {
                     HStack(spacing: 5) {
                         if timing.isAtRisk {
                             Image(systemName: "hourglass")
-                                .foregroundStyle(UsagePalette.warning)
+                                .foregroundStyle(UsagePalette.zoneTint(timing.zone))
                         } else {
                             Image(systemName: "clock")
                                 .foregroundStyle(.tertiary)
@@ -536,26 +547,27 @@ private struct QuotaTile: View {
     }
 
     private var valueTint: Color {
-        switch window.usedPercent {
-        case 85...: UsagePalette.critical
-        case 60..<85: UsagePalette.warning
-        default: Color(nsColor: .labelColor)
-        }
+        UsagePalette.levelTint(
+            usedPercent: window.usedPercent,
+            weight: window.pace?.levelWeight ?? 1,
+            base: Color(nsColor: .labelColor)
+        )
     }
 
     private var progressTint: Color {
-        switch window.usedPercent {
-        case 85...: UsagePalette.critical
-        case 60..<85: UsagePalette.warning
-        default: UsagePalette.normalUsage
-        }
+        UsagePalette.levelTint(
+            usedPercent: window.usedPercent,
+            weight: window.pace?.levelWeight ?? 1,
+            base: UsagePalette.normalUsage
+        )
     }
 
     private func accessibilityValue(_ timing: QuotaTimingPresentation, onPace: Double?) -> String {
         let usage = "\(percentText) \(displayMode.valueSuffix)"
         return ([usage] + [
             onPace.map { QuotaTimingPresentation.onPaceText($0, displayMode: displayMode) },
-            timing.accessibilityText
+            timing.accessibilityText,
+            window.providerHighUsage ? "Claude: high usage" : nil
         ].compactMap { $0 }).joined(separator: ", ")
     }
 }

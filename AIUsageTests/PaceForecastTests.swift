@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import AIUsage
 
@@ -33,9 +34,9 @@ final class PaceForecastTests: XCTestCase {
         XCTAssertNil(window.projectedExhaustion(measuredAt: t0.addingTimeInterval(hour)))
     }
 
-    func testNoProjectionBeforeTenPercentElapsed() {
-        let window = session(used: 30)
-        XCTAssertNil(window.projectedExhaustion(measuredAt: t0.addingTimeInterval(20 * 60)))
+    func testProjectsFromTheStartOfTheWindow() {
+        XCTAssertEqual(session(used: 30).projectedExhaustion(measuredAt: t0.addingTimeInterval(20 * 60)),
+                       t0.addingTimeInterval(4_000))
     }
 
     func testNoProjectionAtZeroUsage() {
@@ -84,7 +85,7 @@ final class PaceForecastTests: XCTestCase {
 
     private func timing(used: Double, nowAfter minutes: Double) -> QuotaTimingPresentation {
         QuotaTimingPresentation(
-            window: session(used: used),
+            window: session(used: used).withPace(at: t0.addingTimeInterval(hour), previous: nil, schedule: nil),
             measuredAt: t0.addingTimeInterval(hour),
             now: t0.addingTimeInterval(minutes * 60)
         )
@@ -118,7 +119,7 @@ final class PaceForecastTests: XCTestCase {
 
     func testTimingDropsForecastOnceResetHasPassed() {
         let presentation = QuotaTimingPresentation(
-            window: session(used: 85),
+            window: session(used: 90).withPace(at: t0.addingTimeInterval(4 * hour), previous: nil, schedule: nil),
             measuredAt: t0.addingTimeInterval(4 * hour),
             now: t0.addingTimeInterval(5 * hour + 600)
         )
@@ -131,9 +132,9 @@ final class PaceForecastTests: XCTestCase {
         let snapshot = ProviderSnapshot(
             provider: .claude,
             planName: nil,
-            windows: [session(used: 85)],
+            windows: [session(used: 90)],
             fetchedAt: t0.addingTimeInterval(4 * hour)
-        )
+        ).paced(previous: nil, schedule: nil)
         XCTAssertTrue(snapshot.isAtRisk(.session, now: t0.addingTimeInterval(4 * hour + 60)))
         XCTAssertFalse(snapshot.isAtRisk(.session, now: t0.addingTimeInterval(5 * hour + 600)))
     }
@@ -146,18 +147,22 @@ final class PaceForecastTests: XCTestCase {
             resetsAt: ProviderParsing.date("2027-01-25T08:00:00Z"),
             startsAt: ProviderParsing.date("2027-01-18T08:00:00Z")
         )
+        let calendar = window.withPace(at: saturday, previous: nil, schedule: nil)
+        let working = window.withPace(at: saturday, previous: nil, schedule: .standard)
         XCTAssertTrue(QuotaTimingPresentation(
-            window: window, measuredAt: saturday, now: saturday
+            window: calendar, measuredAt: saturday, now: saturday
         ).isAtRisk)
         XCTAssertFalse(QuotaTimingPresentation(
-            window: window, measuredAt: saturday, now: saturday, schedule: .standard
+            window: working, measuredAt: saturday, now: saturday, schedule: .standard
         ).isAtRisk)
 
         let snapshot = ProviderSnapshot(
             provider: .claude, planName: nil, windows: [window], fetchedAt: saturday
         )
-        XCTAssertNotNil(snapshot.exhaustion(for: .weekly, now: saturday))
-        XCTAssertNil(snapshot.exhaustion(for: .weekly, now: saturday, schedule: .standard))
+        XCTAssertNotNil(snapshot.paced(previous: nil, schedule: nil)
+            .exhaustion(for: .weekly, now: saturday))
+        XCTAssertNil(snapshot.paced(previous: nil, schedule: .standard)
+            .exhaustion(for: .weekly, now: saturday, schedule: .standard))
     }
 
     func testTimingWithoutResetHasNoText() {
@@ -169,5 +174,66 @@ final class PaceForecastTests: XCTestCase {
         XCTAssertFalse(presentation.isAtRisk)
         XCTAssertNil(presentation.text)
         XCTAssertNil(presentation.accessibilityText)
+    }
+
+    // MARK: - Risk follows the zone
+
+    private var m70: Date { t0.addingTimeInterval(70 * 60) }
+
+    func testOnTrackWindowIsNotAtRiskEvenWithAForecast() {
+        let window = session(used: 24).withPace(at: t0.addingTimeInterval(hour), previous: nil, schedule: nil)
+        XCTAssertNotNil(window.projectedExhaustion(measuredAt: t0.addingTimeInterval(hour)))
+        let p = QuotaTimingPresentation(window: window, measuredAt: t0.addingTimeInterval(hour), now: m70)
+        XCTAssertFalse(p.isAtRisk)
+        XCTAssertEqual(p.text, "Reset 3h 50m")
+        XCTAssertNil(p.zone)
+    }
+
+    func testHighUsageNeverChangesRisk() {
+        var window = session(used: 10)
+        window.providerHighUsage = true
+        window = window.withPace(at: t0.addingTimeInterval(hour), previous: nil, schedule: nil)
+        XCTAssertFalse(window.isAtRisk(now: m70))
+        XCTAssertEqual(window.pace?.zone, .onTrack)
+    }
+
+    func testFullWindowIsNotAtRisk() {
+        let window = session(used: 100).withPace(at: t0.addingTimeInterval(hour), previous: nil, schedule: nil)
+        XCTAssertEqual(window.pace?.zone, .farAhead)
+        XCTAssertFalse(window.isAtRisk(now: m70))
+        XCTAssertFalse(QuotaTimingPresentation(window: window, measuredAt: t0.addingTimeInterval(hour), now: m70).isAtRisk)
+    }
+
+    func testTimingCarriesTheZoneForTheHourglass() {
+        func zone(used: Double) -> PaceReading.Zone? {
+            let window = session(used: used).withPace(at: t0.addingTimeInterval(hour), previous: nil, schedule: nil)
+            return QuotaTimingPresentation(window: window, measuredAt: t0.addingTimeInterval(hour), now: m70).zone
+        }
+        XCTAssertEqual(zone(used: 27), .ahead)
+        XCTAssertEqual(zone(used: 40), .farAhead)
+    }
+
+    func testZoneTint() {
+        XCTAssertEqual(UsagePalette.zoneTint(.farAhead), UsagePalette.critical)
+        XCTAssertEqual(UsagePalette.zoneTint(.ahead), UsagePalette.warning)
+        XCTAssertEqual(UsagePalette.zoneTint(.onTrack), UsagePalette.normalUsage)
+        XCTAssertEqual(UsagePalette.zoneTint(nil), UsagePalette.normalUsage)
+    }
+
+    func testLevelTintMutesOnACalmPace() {
+        let base = UsagePalette.normalUsage
+        XCTAssertEqual(UsagePalette.levelTint(usedPercent: 50, weight: 1, base: base), base)
+        XCTAssertEqual(UsagePalette.levelTint(usedPercent: 100, weight: 0, base: base), UsagePalette.critical)
+        assertColour(UsagePalette.levelTint(usedPercent: 90, weight: 1, base: base), UsagePalette.critical)
+        assertColour(UsagePalette.levelTint(usedPercent: 70, weight: 1, base: base), UsagePalette.warning)
+        assertColour(UsagePalette.levelTint(usedPercent: 70, weight: 0, base: base), base)
+        assertColour(UsagePalette.levelTint(usedPercent: 90, weight: 0, base: base), base)
+    }
+
+    private func assertColour(_ a: Color, _ b: Color, file: StaticString = #filePath, line: UInt = #line) {
+        let x = a.resolve(in: EnvironmentValues()), y = b.resolve(in: EnvironmentValues())
+        XCTAssertEqual(x.red, y.red, accuracy: 0.01, file: file, line: line)
+        XCTAssertEqual(x.green, y.green, accuracy: 0.01, file: file, line: line)
+        XCTAssertEqual(x.blue, y.blue, accuracy: 0.01, file: file, line: line)
     }
 }
