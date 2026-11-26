@@ -69,11 +69,30 @@ final class UsageStoreTests: XCTestCase {
         XCTAssertEqual(fast.menuBarReading(for: item)?.isAtRisk, true)
         XCTAssertEqual(fast.menuBarReading(for: item)?.resetsAt, t0.addingTimeInterval(5 * 3_600))
         XCTAssertEqual(fast.menuBarReading(for: item)?.exhaustsAt, t0.addingTimeInterval(2.5 * 3_600))
+        XCTAssertEqual(fast.menuBarReading(for: item)?.levelWeight, 1)
 
         let slow = store(used: 10)
         await slow.refresh()
         XCTAssertEqual(slow.menuBarReading(for: item)?.isAtRisk, false)
         XCTAssertNil(slow.menuBarReading(for: item)?.exhaustsAt)
+        XCTAssertEqual(slow.menuBarReading(for: item)?.levelWeight, 0)
+    }
+
+    func testWindowWithoutStartKeepsFullLevelColour() async {
+        let snapshot = ProviderSnapshot(
+            provider: .claude,
+            planName: "Pro",
+            windows: [QuotaWindow(kind: .sonnet, usedPercent: 76, resetsAt: nil)],
+            fetchedAt: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+        let store = UsageStore(
+            providers: [SequencedProvider(id: .claude, results: [.success(snapshot)])],
+            availabilityChecker: FixedProviderAvailabilityChecker(installed: [.claude])
+        )
+        await store.refresh()
+
+        XCTAssertNil(store.states[.claude]?.snapshot?.windows.first?.pace)
+        XCTAssertEqual(store.menuBarReading(for: MenuBarItemID(provider: .claude, metric: .sonnet))?.levelWeight, 1)
     }
 
     func testMenuBarReadingsFollowTheWorkSchedule() async {

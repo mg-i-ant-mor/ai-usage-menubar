@@ -9,6 +9,8 @@ struct MenuBarReading: Equatable, Sendable {
     let isStale: Bool
     /// The window runs out before its reset at its current pace.
     let isAtRisk: Bool
+    /// How much the pace backs the level colour: 0 calm, 1 full.
+    let levelWeight: Double
     let resetsAt: Date?
     /// When the window fills at its current pace, if before `resetsAt`.
     let exhaustsAt: Date?
@@ -20,6 +22,7 @@ struct MenuBarReading: Equatable, Sendable {
         displayMode: UsageDisplayMode,
         isStale: Bool,
         isAtRisk: Bool = false,
+        levelWeight: Double = 1,
         resetsAt: Date? = nil,
         exhaustsAt: Date? = nil
     ) {
@@ -29,6 +32,7 @@ struct MenuBarReading: Equatable, Sendable {
         self.displayMode = displayMode
         self.isStale = isStale
         self.isAtRisk = isAtRisk
+        self.levelWeight = levelWeight
         self.resetsAt = resetsAt
         self.exhaustsAt = exhaustsAt
     }
@@ -307,6 +311,7 @@ final class UsageStore {
                 displayMode: displayMode,
                 isStale: state.isStale,
                 isAtRisk: state.snapshot?.isAtRisk(item.metric, now: now) == true,
+                levelWeight: state.snapshot?.window(for: item.metric)?.pace?.levelWeight ?? 1,
                 resetsAt: state.snapshot?.window(for: item.metric)?.resetsAt,
                 exhaustsAt: exhaustion
             )

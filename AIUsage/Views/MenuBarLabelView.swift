@@ -91,11 +91,13 @@ enum MenuBarTooltip {
         let value: String
         switch reading.value {
         case .percentage(let percent):
-            // Same thresholds as the dashboard cards: orange from 60%, red from 85%.
+            // Same levels as the dashboard cards: orange from 60%, red from 85%,
+            // both only when the pace backs them (weight >= 0.5); 100% is always red.
             let used = reading.displayMode == .used ? percent : 100 - percent
-            icon = used >= 85 ? "🔴"
+            let backed = reading.levelWeight >= 0.5
+            icon = used >= 100 || (used >= 85 && backed) ? "🔴"
                 : reading.isAtRisk ? "⏳"
-                : used >= 60 ? "🟠"
+                : used >= 60 && backed ? "🟠"
                 : "🟢"
             value = "\(Int(percent.rounded()))% \(reading.displayMode.valueSuffix)"
         case let .money(amount, currencyCode):

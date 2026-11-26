@@ -541,19 +541,19 @@ private struct QuotaTile: View {
     }
 
     private var valueTint: Color {
-        switch window.usedPercent {
-        case 85...: UsagePalette.critical
-        case 60..<85: UsagePalette.warning
-        default: Color(nsColor: .labelColor)
-        }
+        UsagePalette.levelTint(
+            usedPercent: window.usedPercent,
+            weight: window.pace?.levelWeight ?? 1,
+            base: Color(nsColor: .labelColor)
+        )
     }
 
     private var progressTint: Color {
-        switch window.usedPercent {
-        case 85...: UsagePalette.critical
-        case 60..<85: UsagePalette.warning
-        default: UsagePalette.normalUsage
-        }
+        UsagePalette.levelTint(
+            usedPercent: window.usedPercent,
+            weight: window.pace?.levelWeight ?? 1,
+            base: UsagePalette.normalUsage
+        )
     }
 
     private func accessibilityValue(_ timing: QuotaTimingPresentation, onPace: Double?) -> String {

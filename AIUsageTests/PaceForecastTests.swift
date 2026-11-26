@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import AIUsage
 
@@ -209,5 +210,22 @@ final class PaceForecastTests: XCTestCase {
         XCTAssertEqual(UsagePalette.zoneTint(.ahead), UsagePalette.warning)
         XCTAssertEqual(UsagePalette.zoneTint(.onTrack), UsagePalette.normalUsage)
         XCTAssertEqual(UsagePalette.zoneTint(nil), UsagePalette.normalUsage)
+    }
+
+    func testLevelTintMutesOnACalmPace() {
+        let base = UsagePalette.normalUsage
+        XCTAssertEqual(UsagePalette.levelTint(usedPercent: 50, weight: 1, base: base), base)
+        XCTAssertEqual(UsagePalette.levelTint(usedPercent: 100, weight: 0, base: base), UsagePalette.critical)
+        assertColour(UsagePalette.levelTint(usedPercent: 90, weight: 1, base: base), UsagePalette.critical)
+        assertColour(UsagePalette.levelTint(usedPercent: 70, weight: 1, base: base), UsagePalette.warning)
+        assertColour(UsagePalette.levelTint(usedPercent: 70, weight: 0, base: base), base)
+        assertColour(UsagePalette.levelTint(usedPercent: 90, weight: 0, base: base), base)
+    }
+
+    private func assertColour(_ a: Color, _ b: Color, file: StaticString = #filePath, line: UInt = #line) {
+        let x = a.resolve(in: EnvironmentValues()), y = b.resolve(in: EnvironmentValues())
+        XCTAssertEqual(x.red, y.red, accuracy: 0.01, file: file, line: line)
+        XCTAssertEqual(x.green, y.green, accuracy: 0.01, file: file, line: line)
+        XCTAssertEqual(x.blue, y.blue, accuracy: 0.01, file: file, line: line)
     }
 }

@@ -133,6 +133,40 @@ final class MenuBarPresentationTests: XCTestCase {
         """)
     }
 
+    func testTooltipMutesLevelIconsOnACalmPace() {
+        func reading(_ metric: MenuBarMetricID, _ percent: Double, _ weight: Double) -> MenuBarReading {
+            MenuBarReading(
+                provider: .claude, metric: metric, value: .percentage(percent),
+                displayMode: .used, isStale: false, levelWeight: weight
+            )
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let text = MenuBarTooltip.text(
+            for: [MenuBarProviderReadings(
+                provider: .claude,
+                selectedMetrics: [.session, .weekly, .sonnet, .fable],
+                readings: [
+                    reading(.session, 76, 0.4),
+                    reading(.weekly, 76, 0.6),
+                    reading(.sonnet, 90, 0.4),
+                    reading(.fable, 100, 0)
+                ]
+            )],
+            now: Date(timeIntervalSince1970: 1_800_000_000),
+            calendar: calendar,
+            locale: Locale(identifier: "en_GB")
+        )
+
+        XCTAssertEqual(text, """
+        Claude Code
+        🟢 Session — 76% used
+        🟠 Weekly — 76% used
+        🟢 Sonnet — 90% used
+        🔴 Fable — 100% used
+        """)
+    }
+
     func testTooltipWithoutProvidersNamesTheApp() {
         XCTAssertEqual(MenuBarTooltip.text(for: [], now: Date()), "AI Usage")
     }
