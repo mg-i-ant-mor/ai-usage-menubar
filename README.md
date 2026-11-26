@@ -44,14 +44,17 @@ features below and ships its own releases and update feed.
 
 ## What this fork adds
 
-- **Forecast when a limit runs out.** When a limit is on pace to run out
-  before it resets, its card shows when it will be full and an hourglass marks
-  it. Turn on **Working hours only** to measure weekly and monthly limits in
-  your working days and hours, so nights and weekends don't skew the pace.
+- **Forecast when a limit runs out.** When a limit is ahead of pace and will
+  run out before it resets, its card shows when it will be full and an
+  hourglass marks it, orange when ahead and red when far ahead. The tooltip
+  also says when you'd be back on pace if you paused. Turn on **Working hours
+  only** to measure weekly and monthly limits in your working days and hours,
+  so nights and weekends don't skew the pace.
 - **On-pace mark and daily budget.** A thin mark on each bar shows where usage
-  would be now to reach the limit exactly at its reset. Limits that last a day
-  or more show how much you can use each day until they reset, as in
-  `6.1%/day · Reset 1d 23h`.
+  would be now to reach the limit exactly at its reset, and takes the color of
+  how far ahead you are. Orange and red usage colors fade while you're under
+  pace. Limits that last a day or more show how much you can use each day until
+  they reset, as in `6.1%/day · Reset 1d 23h`.
 - **More than one Claude account.** Each account is identified by its keychain
   login and gets its own card. In Settings, tick which ones the menu bar shows.
 - **Detailed tooltip.** Hover the menu bar item for every limit, with limit
@@ -109,16 +112,29 @@ time.
   accounts that have none, the tool's default limit is shown instead.
 - The panel lists when each banked reset expires and turns the next one orange
   in its final 24 hours.
-- When a limit is on pace to run out before it resets, its card shows when it
-  will be full, and an hourglass marks it in the panel and the menu bar. The
-  pace is the average since the limit's window started, worked out from the
-  current reading, so nothing is stored between refreshes. Turn on
-  **Working hours only** in Settings to measure weekly and monthly limits in
-  your working days and hours, so nights and weekends don't skew the pace.
+- When a limit is 5 points or more ahead of pace and on course to run out
+  before it resets, its card shows when it will be full, and an hourglass marks
+  it in the panel and the menu bar: orange when ahead, red when far ahead. The
+  pace is the average since the limit's window started, weighted by how much of
+  the window has passed so it counts from the first minute. It drops back only
+  once usage is 5 points lower, to avoid flicker; the app remembers that state
+  between refreshes while it runs and stores no usage history. A full limit is
+  red, not marked with an hourglass. The tooltip adds when you'd be back on
+  pace if you paused, and a stale reading keeps its forecast after "Not
+  updated". Turn on **Working hours only** in Settings to measure weekly and
+  monthly limits in your working days and hours, so nights and weekends don't
+  skew the pace.
 - A thin mark on each bar shows where usage would be now to reach the limit
-  exactly at its reset. Past the mark you're ahead of pace. Sessions always
-  measure it in clock time; with **Working hours only**, weekly and monthly
-  limits measure it in your working time.
+  exactly at its reset. Past the mark you're ahead of pace, and the mark turns
+  orange when ahead and red when far ahead. Sessions always measure it in clock
+  time; with **Working hours only**, weekly and monthly limits measure it in
+  your working time.
+- Orange (from 60%) and red (from 85%) usage colors fade toward the normal
+  color while you're under pace, and 100% is always red. The tooltip icons
+  follow the same rule.
+- When Claude itself flags a limit as high usage, the card shows an
+  information icon and the tooltip a "Claude: high usage" line. It's only
+  shown; it never changes the risk or the colors.
 - Limits that last a day or more, such as weekly and monthly ones, show how
   much you can use each day until they reset without running out, as in
   `6.1%/day · Reset 1d 23h` on the card. It's the share left divided by the days left, so it isn't
