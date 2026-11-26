@@ -220,7 +220,7 @@ final class VisualSnapshotTests: XCTestCase {
                     resetsAt: now.addingTimeInterval(5 * 86_400 + 7_200),
                     startsAt: now.addingTimeInterval(-2 * 86_400 + 7_200)
                 ),
-                QuotaWindow(kind: .sonnet, usedPercent: 76, resetsAt: nil)
+                QuotaWindow(kind: .sonnet, usedPercent: 76, resetsAt: nil, providerHighUsage: true)
             ],
             fetchedAt: now
         )

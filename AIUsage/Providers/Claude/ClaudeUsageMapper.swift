@@ -75,6 +75,10 @@ enum ClaudeUsageMapper {
         appendWindow(body["seven_day"], kind: .weekly, length: weekLength, to: &windows)
         appendWindow(body["seven_day_sonnet"], kind: .sonnet, length: weekLength, to: &windows)
         appendFable(body["limits"], to: &windows)
+        let flagged = highUsageKinds(body["limits"])
+        for index in windows.indices where flagged.contains(windows[index].kind) {
+            windows[index].providerHighUsage = true
+        }
 
         return ProviderSnapshot(
             provider: .claude,
@@ -169,6 +173,37 @@ enum ClaudeUsageMapper {
             ))
             return
         }
+    }
+
+    /// Windows whose `limits[]` row carries a `severity` other than "normal".
+    private static func highUsageKinds(_ limits: Any?) -> Set<QuotaKind> {
+        var kinds: Set<QuotaKind> = []
+        for item in limits as? [Any] ?? [] {
+            guard let limit = ProviderParsing.object(item),
+                  let severity = limit["severity"] as? String, severity != "normal",
+                  let rowKind = ProviderParsing.string(limit["kind"]) else {
+                continue
+            }
+            switch rowKind {
+            case "session":
+                kinds.insert(.session)
+            case "weekly_all":
+                kinds.insert(.weekly)
+            case "weekly_scoped":
+                let name = ProviderParsing.object(limit["scope"])
+                    .flatMap { ProviderParsing.object($0["model"]) }
+                    .flatMap { ProviderParsing.string($0["display_name"]) }?
+                    .lowercased() ?? ""
+                if name.hasPrefix("sonnet") {
+                    kinds.insert(.sonnet)
+                } else if name.hasPrefix("fable") {
+                    kinds.insert(.fable)
+                }
+            default:
+                break
+            }
+        }
+        return kinds
     }
 
     /// Anthropic names these fields "credits" but reports minor units of the

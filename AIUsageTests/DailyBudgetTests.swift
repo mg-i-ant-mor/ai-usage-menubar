@@ -99,6 +99,7 @@ final class DailyBudgetTests: XCTestCase {
         // 60% in the first 79h of a week: the other 40% takes ~53h, before the
         // reset 89h away. Budget 40 / 3.71 days ≈ 11.
         let window = weekly(used: 60, resetIn: 3 * day + 17 * hour, startsBeforeReset: 7 * day)
+            .withPace(at: now, previous: nil, schedule: nil)
         let timing = QuotaTimingPresentation(window: window, measuredAt: now, now: now)
         XCTAssertTrue(timing.isAtRisk)
         XCTAssertEqual(timing.text, "Full 2d 4h · Reset 3d 17h")

@@ -60,17 +60,33 @@ database, or background transcript scanning.
 - Claude Code and Codex also surface banked usage-limit resets and their
   expirations, read-only.
 - A quota window with a known start shows when it will fill at its average
-  pace since it started, only when that comes before its reset, and is marked
-  with an hourglass in the panel and the menu bar. The projection is computed
-  from the current reading alone; no usage history is kept. An optional
-  working-hours setting (off by default) measures windows longer than a day
-  in working time, so nights and days off neither slow the pace nor count as
-  time left.
+  pace since it started, only when that comes before its reset. The pace is
+  weighted by how much of the window has passed, so it counts from the first
+  minute with no initial wait. The window is at risk, and marked with an
+  hourglass in the panel and the menu bar, from 5 weighted points ahead of pace
+  (early in a window it takes more than 5 raw points); it clears 5 weighted
+  points lower than it set, so it doesn't flicker. In the panel the
+  hourglass is orange when ahead and red when far ahead; a full window is red,
+  not at risk.
+  The projection is computed from the current reading, and the app keeps only
+  each window's zone in memory between refreshes while it runs; no usage
+  history is stored. When at risk, the tooltip also says when the window will
+  be back on pace if usage pauses, and a stale reading keeps that forecast
+  after "Not updated". An optional working-hours setting (off by default)
+  measures windows longer than a day in working time, so nights and days off
+  neither slow the pace nor count as time left.
 - A quota window with a known start and reset shows an on-pace mark on its
   bar: the share of the window that has passed, which is where usage would be
-  to reach 100% exactly at the reset. Windows of a day or less use calendar
-  time; longer windows use working time when the working-hours setting is on.
-  VoiceOver reads it in the tile's Left or Used mode.
+  to reach 100% exactly at the reset. The mark takes the pace zone's color:
+  teal on track, orange ahead, red far ahead. Windows of a day or less use
+  calendar time; longer windows use working time when the working-hours
+  setting is on. VoiceOver reads it in the tile's Left or Used mode.
+- Orange from 60% used and red from 85% fade toward the normal color as
+  usage falls below pace (from 100% of pace down to 70%), and are full strength
+  when it is at or over pace. At 100% a window is always red. The tooltip icons switch rather than fade.
+- When Claude flags a window as high usage, the tile shows an information icon
+  and the tooltip a "Claude: high usage" line. It never changes the risk or
+  the colors.
 - A quota window of a day or longer shows a daily budget: the percent left
   divided by the days until its reset, on its card's reset line and to
   VoiceOver. It is plain arithmetic on the current

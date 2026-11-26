@@ -477,12 +477,12 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         guard isStarted else { return }
 
         store.setTrackedProviders(preferences.trackedProviderIDs)
+        store.setWorkSchedule(preferences.activeWorkSchedule)
         let state = withObservationTracking {
             (
                 groups: store.menuBarProviderReadings(
                     for: preferences.menuBarProviderConfigurations,
-                    displayMode: preferences.usageDisplayMode,
-                    workSchedule: preferences.activeWorkSchedule
+                    displayMode: preferences.usageDisplayMode
                 ),
                 // The tooltip lists every account, even those the bar hides.
                 tooltipGroups: store.menuBarProviderReadings(
@@ -491,9 +491,9 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
                         all.accountIDs = Set(store.states[$0.provider]?.accounts.map(\.id) ?? [])
                         return all
                     },
-                    displayMode: preferences.usageDisplayMode,
-                    workSchedule: preferences.activeWorkSchedule
+                    displayMode: preferences.usageDisplayMode
                 ),
+                workSchedule: preferences.activeWorkSchedule,
                 trackedProviders: preferences.trackedProviderIDs,
                 refreshInterval: preferences.refreshInterval
             )

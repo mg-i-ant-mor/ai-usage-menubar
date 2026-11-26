@@ -91,11 +91,13 @@ enum MenuBarTooltip {
         let value: String
         switch reading.value {
         case .percentage(let percent):
-            // Same thresholds as the dashboard cards: orange from 60%, red from 85%.
+            // Same levels as the dashboard cards: orange from 60%, red from 85%,
+            // both only when the pace backs them (weight >= 0.5); 100% is always red.
             let used = reading.displayMode == .used ? percent : 100 - percent
-            icon = used >= 85 ? "🔴"
+            let backed = reading.levelWeight >= 0.5
+            icon = used >= 100 || (used >= 85 && backed) ? "🔴"
                 : reading.isAtRisk ? "⏳"
-                : used >= 60 ? "🟠"
+                : used >= 60 && backed ? "🟠"
                 : "🟢"
             value = "\(Int(percent.rounded()))% \(reading.displayMode.valueSuffix)"
         case let .money(amount, currencyCode):
@@ -113,17 +115,26 @@ enum MenuBarTooltip {
         var details: [String] = []
         if reading.isStale {
             details.append("Not updated")
-        } else if let exhaustsAt = reading.exhaustsAt {
+        }
+        if let exhaustsAt = reading.exhaustsAt, exhaustsAt > now {
             details.append("Full by \(time(exhaustsAt, now: now, calendar: calendar, locale: locale)) at this pace")
+        }
+        if let coolsAt = reading.coolsAt, coolsAt > now, coolsAt != reading.resetsAt {
+            details.append("Back on pace by \(time(coolsAt, now: now, calendar: calendar, locale: locale)) if you pause")
         }
         if let resetsAt = reading.resetsAt, resetsAt > now {
             details.append("Resets \(time(resetsAt, now: now, calendar: calendar, locale: locale))")
         }
 
         let title = "\(reading.isStale ? "⚠️" : icon) \(reading.metric.title) — \(value)"
-        return details.isEmpty
-            ? [title]
-            : [title, "      " + details.joined(separator: " · ")]
+        var lines = [title]
+        if !details.isEmpty {
+            lines.append("      " + details.joined(separator: " · "))
+        }
+        if reading.providerHighUsage {
+            lines.append("      Claude: high usage")
+        }
+        return lines
     }
 
     /// `11:00` today, `Tue 08:00` within a week, `3 Feb` after that.

@@ -363,9 +363,11 @@ struct QuotaWindow: Identifiable, Equatable, Sendable {
     let resetsAt: Date?
     /// When the window began, from the provider or its known length.
     var startsAt: Date? = nil
-
-    /// The share of a window that has to pass before its pace is trusted.
-    static let minimumElapsedFraction = 0.1
+    /// How far usage runs ahead of the pace; set by the store when it takes a snapshot.
+    var pace: PaceReading? = nil
+    /// Claude's own `limits[].severity` flags this window, as of the reading.
+    /// Information only: never drives risk, zones or colours.
+    var providerHighUsage = false
 
     var id: QuotaKind { kind }
     var renderedFraction: Double { min(max(usedPercent / 100, 0), 1) }
@@ -386,8 +388,7 @@ struct QuotaWindow: Identifiable, Equatable, Sendable {
 
         if let schedule, reset.timeIntervalSince(start) > 86_400 {
             let elapsed = schedule.workingTime(from: start, to: measuredAt, calendar: calendar)
-            let total = schedule.workingTime(from: start, to: reset, calendar: calendar)
-            guard elapsed > 0, elapsed >= total * Self.minimumElapsedFraction else { return nil }
+            guard elapsed > 0 else { return nil }
             let needed = (100 - usedPercent) * elapsed / usedPercent
             guard needed < schedule.workingTime(from: measuredAt, to: reset, calendar: calendar)
             else { return nil }
@@ -395,8 +396,6 @@ struct QuotaWindow: Identifiable, Equatable, Sendable {
         }
 
         let elapsed = measuredAt.timeIntervalSince(start)
-        guard elapsed >= reset.timeIntervalSince(start) * Self.minimumElapsedFraction
-        else { return nil }
         let exhaustion = measuredAt.addingTimeInterval(
             (100 - usedPercent) * elapsed / usedPercent
         )
@@ -524,7 +523,7 @@ struct UsageResets: Equatable, Sendable {
 struct ProviderSnapshot: Equatable, Sendable {
     let provider: ProviderID
     let planName: String?
-    let windows: [QuotaWindow]
+    var windows: [QuotaWindow]
     let billingUsage: BillingUsage?
     let resets: UsageResets?
     let fetchedAt: Date
@@ -564,21 +563,19 @@ struct ProviderSnapshot: Equatable, Sendable {
         return windows.first { $0.kind == quotaKind }
     }
 
-    /// The metric's window runs out before its reset at its current pace,
-    /// and that reset is still ahead of `now`.
-    func isAtRisk(_ metric: MenuBarMetricID, now: Date, schedule: WorkSchedule? = nil) -> Bool {
-        exhaustion(for: metric, now: now, schedule: schedule) != nil
+    /// The metric's window is ahead of its pace (see `QuotaWindow.isAtRisk`).
+    func isAtRisk(_ metric: MenuBarMetricID, now: Date) -> Bool {
+        window(for: metric)?.isAtRisk(now: now) == true
     }
 
-    /// When the metric's window fills at its current pace, while its reset
-    /// is still ahead of `now` and comes after that.
+    /// When an at-risk metric's window fills at its current pace, if that comes
+    /// before its reset.
     func exhaustion(
         for metric: MenuBarMetricID,
         now: Date,
         schedule: WorkSchedule? = nil
     ) -> Date? {
-        guard let window = window(for: metric),
-              let reset = window.resetsAt, now < reset else { return nil }
+        guard let window = window(for: metric), isAtRisk(metric, now: now) else { return nil }
         return window.projectedExhaustion(measuredAt: fetchedAt, schedule: schedule)
     }
 
