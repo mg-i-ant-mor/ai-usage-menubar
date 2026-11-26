@@ -15,6 +15,8 @@ struct PaceReading: Equatable, Sendable {
     static let margin = 5.0
     /// Weighted points a zone is held past its entry threshold (`h`).
     static let hysteresis = 5.0
+    /// Seconds a window's reset may drift between fetches and still count as the same window.
+    static let resetJitter: TimeInterval = 60
 
     let zone: Zone
     /// `f`: 0 at 70% of the pace or less, 1 at the pace or more.
@@ -91,7 +93,7 @@ extension QuotaWindow {
 
 extension ProviderSnapshot {
     /// Each window paced at `fetchedAt`, holding its zone from `previous`'s window of the
-    /// same kind and reset; a rolled-over window starts fresh.
+    /// same kind and reset (within `PaceReading.resetJitter`); a rolled-over window starts fresh.
     func paced(
         previous: ProviderSnapshot?,
         schedule: WorkSchedule?,
@@ -101,8 +103,10 @@ extension ProviderSnapshot {
         snapshot.windows = windows.map { window in
             window.withPace(
                 at: fetchedAt,
-                previous: previous?.windows.first {
-                    $0.kind == window.kind && $0.resetsAt == window.resetsAt
+                previous: previous?.windows.first { old in
+                    guard old.kind == window.kind, let oldReset = old.resetsAt,
+                          let reset = window.resetsAt else { return false }
+                    return abs(oldReset.timeIntervalSince(reset)) < PaceReading.resetJitter
                 }?.pace?.zone,
                 schedule: schedule,
                 calendar: calendar

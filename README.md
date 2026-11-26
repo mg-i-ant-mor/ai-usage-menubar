@@ -112,14 +112,15 @@ time.
   accounts that have none, the tool's default limit is shown instead.
 - The panel lists when each banked reset expires and turns the next one orange
   in its final 24 hours.
-- When a limit is 5 points or more ahead of pace and on course to run out
-  before it resets, its card shows when it will be full, and an hourglass marks
-  it in the panel and the menu bar; in the panel it's orange when ahead and red
-  when far ahead. The pace is the average since the limit's window started,
-  weighted by how much of the window has passed so it counts from the first
-  minute. It drops back only once usage is 5 points lower, to avoid flicker;
-  the app remembers that state between refreshes while it runs and stores no
-  usage history. A full limit is red, not marked with an hourglass. The tooltip
+- When a limit is 5 weighted points or more ahead of pace (early in a window
+  it takes more than 5 raw points) and on course to run out before it resets,
+  its card shows when it will be full, and an hourglass marks it in the panel
+  and the menu bar; in the panel it's orange when ahead and red when far ahead.
+  The pace is the average since the limit's window started, weighted by how
+  much of the window has passed so it counts from the first minute. It drops
+  back only once the weighted lead is 5 points lower, to avoid flicker; the app
+  remembers that state between refreshes while it runs and stores no usage
+  history. A full limit is red, not marked with an hourglass. The tooltip
   adds when you'd be back on pace if you paused, and a stale reading keeps its
   forecast after "Not updated". Turn on **Working hours only** in Settings to
   measure weekly and monthly limits in your working days and hours, so nights
@@ -130,8 +131,8 @@ time.
   time; with **Working hours only**, weekly and monthly limits measure it in
   your working time.
 - Orange (from 60%) and red (from 85%) usage colors fade toward the normal
-  color while you're under pace, and 100% is always red. The tooltip icons
-  switch rather than fade.
+  color as you fall below pace (from 100% of pace down to 70%), and 100% is
+  always red. The tooltip icons switch rather than fade.
 - When Claude itself flags a limit as high usage, the card shows an
   information icon and the tooltip a "Claude: high usage" line. It's only
   shown; it never changes the risk or the colors.

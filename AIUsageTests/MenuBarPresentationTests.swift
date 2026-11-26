@@ -96,6 +96,42 @@ final class MenuBarPresentationTests: XCTestCase {
         """)
     }
 
+    func testTooltipSkipsForecastTimesAlreadyPast() {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        func text(coolsAt: TimeInterval) -> String {
+            MenuBarTooltip.text(
+                for: [MenuBarProviderReadings(
+                    provider: .claude,
+                    selectedMetrics: [.session],
+                    readings: [MenuBarReading(
+                        provider: .claude, metric: .session, value: .percentage(66),
+                        displayMode: .used, isStale: true, isAtRisk: true,
+                        resetsAt: t0.addingTimeInterval(3 * 3_600),
+                        exhaustsAt: t0.addingTimeInterval(-600),
+                        coolsAt: t0.addingTimeInterval(coolsAt)
+                    )]
+                )],
+                now: t0,
+                calendar: calendar,
+                locale: Locale(identifier: "en_GB")
+            )
+        }
+
+        XCTAssertEqual(text(coolsAt: -300), """
+        Claude Code
+        ⚠️ Session — 66% used
+              Not updated · Resets 11:00
+        """)
+        // Cooling exactly at the reset adds nothing the reset doesn't already say.
+        XCTAssertEqual(text(coolsAt: 3 * 3_600), """
+        Claude Code
+        ⚠️ Session — 66% used
+              Not updated · Resets 11:00
+        """)
+    }
+
     func testTooltipListsEachLimitWithItsTimesAndStatus() {
         let t0 = Date(timeIntervalSince1970: 1_800_000_000) // Fri 15 Jan 2027 08:00 UTC
         var calendar = Calendar(identifier: .gregorian)

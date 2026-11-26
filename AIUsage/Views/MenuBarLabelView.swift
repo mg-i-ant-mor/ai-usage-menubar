@@ -116,10 +116,10 @@ enum MenuBarTooltip {
         if reading.isStale {
             details.append("Not updated")
         }
-        if let exhaustsAt = reading.exhaustsAt {
+        if let exhaustsAt = reading.exhaustsAt, exhaustsAt > now {
             details.append("Full by \(time(exhaustsAt, now: now, calendar: calendar, locale: locale)) at this pace")
         }
-        if let coolsAt = reading.coolsAt {
+        if let coolsAt = reading.coolsAt, coolsAt > now, coolsAt != reading.resetsAt {
             details.append("Back on pace by \(time(coolsAt, now: now, calendar: calendar, locale: locale)) if you pause")
         }
         if let resetsAt = reading.resetsAt, resetsAt > now {

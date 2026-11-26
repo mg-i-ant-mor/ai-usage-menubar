@@ -63,8 +63,9 @@ database, or background transcript scanning.
   pace since it started, only when that comes before its reset. The pace is
   weighted by how much of the window has passed, so it counts from the first
   minute with no initial wait. The window is at risk, and marked with an
-  hourglass in the panel and the menu bar, from 5 points ahead of pace; it
-  clears 5 points lower than it set, so it doesn't flicker. In the panel the
+  hourglass in the panel and the menu bar, from 5 weighted points ahead of pace
+  (early in a window it takes more than 5 raw points); it clears 5 weighted
+  points lower than it set, so it doesn't flicker. In the panel the
   hourglass is orange when ahead and red when far ahead; a full window is red,
   not at risk.
   The projection is computed from the current reading, and the app keeps only
@@ -80,9 +81,9 @@ database, or background transcript scanning.
   teal on track, orange ahead, red far ahead. Windows of a day or less use
   calendar time; longer windows use working time when the working-hours
   setting is on. VoiceOver reads it in the tile's Left or Used mode.
-- Orange from 60% used and red from 85% fade toward the normal color while
-  usage is under pace, and are full strength when it is at or over pace. At
-  100% a window is always red. The tooltip icons switch rather than fade.
+- Orange from 60% used and red from 85% fade toward the normal color as
+  usage falls below pace (from 100% of pace down to 70%), and are full strength
+  when it is at or over pace. At 100% a window is always red. The tooltip icons switch rather than fade.
 - When Claude flags a window as high usage, the tile shows an information icon
   and the tooltip a "Claude: high usage" line. It never changes the risk or
   the colors.

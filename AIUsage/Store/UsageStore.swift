@@ -7,7 +7,7 @@ struct MenuBarReading: Equatable, Sendable {
     let value: MenuBarReadingValue
     let displayMode: UsageDisplayMode
     let isStale: Bool
-    /// The window runs out before its reset at its current pace.
+    /// The window's pace zone is ahead or far ahead; it is not full and its reset is still ahead.
     let isAtRisk: Bool
     /// How much the pace backs the level colour: 0 calm, 1 full.
     let levelWeight: Double

@@ -132,6 +132,7 @@ final class UsageStoreTests: XCTestCase {
         used: Double,
         t0: Date,
         hours: Double,
+        resetJitter: TimeInterval = 0,
         otherAccounts: [ProviderAccount] = []
     ) -> ProviderSnapshot {
         var snapshot = ProviderSnapshot(
@@ -140,7 +141,7 @@ final class UsageStoreTests: XCTestCase {
             windows: [QuotaWindow(
                 kind: .session,
                 usedPercent: used,
-                resetsAt: t0.addingTimeInterval(5 * 3_600),
+                resetsAt: t0.addingTimeInterval(5 * 3_600 + resetJitter),
                 startsAt: t0
             )],
             fetchedAt: t0.addingTimeInterval(hours * 3_600)
@@ -173,6 +174,61 @@ final class UsageStoreTests: XCTestCase {
         let fresh = claudeStore([second])
         await fresh.refresh()
         XCTAssertEqual(zone(fresh), .onTrack)
+    }
+
+    func testJitteredResetKeepsTheZone() async {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        let first = sessionSnapshot(used: 30, t0: t0, hours: 1)
+        let second = sessionSnapshot(used: 43, t0: t0, hours: 2, resetJitter: 0.4)
+        let store = claudeStore([first, second])
+        await store.refresh()
+        XCTAssertEqual(zone(store), .ahead)
+        await store.refresh()
+        XCTAssertEqual(zone(store), .ahead)  // weighted 2.88, held across the 0.4 s drift
+    }
+
+    func testStaleReadingKeepsItsForecast() async {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        let snapshot = sessionSnapshot(used: 40, t0: t0, hours: 1)
+        let store = UsageStore(
+            providers: [SequencedProvider(id: .claude, results: [
+                .success(snapshot),
+                .failure(ProviderFailure(.transient, "Offline"))
+            ])],
+            availabilityChecker: FixedProviderAvailabilityChecker(installed: [.claude])
+        )
+        let item = MenuBarItemID(provider: .claude, metric: .session)
+
+        await store.refresh()
+        let pace = store.states[.claude]?.snapshot?.windows.first?.pace
+        await store.refresh()
+
+        let reading = store.menuBarReading(for: item)
+        XCTAssertEqual(reading?.isStale, true)
+        XCTAssertEqual(reading?.isAtRisk, true)
+        XCTAssertNotNil(reading?.exhaustsAt)
+        XCTAssertNotNil(reading?.coolsAt)
+        XCTAssertNotNil(pace)
+        XCTAssertEqual(store.states[.claude]?.snapshot?.windows.first?.pace, pace)
+    }
+
+    func testMenuBarReadingCarriesProviderHighUsage() async {
+        let snapshot = ProviderSnapshot(
+            provider: .claude,
+            planName: "Pro",
+            windows: [QuotaWindow(kind: .weekly, usedPercent: 76, resetsAt: nil, providerHighUsage: true)],
+            fetchedAt: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+        let store = UsageStore(
+            providers: [SequencedProvider(id: .claude, results: [.success(snapshot)])],
+            availabilityChecker: FixedProviderAvailabilityChecker(installed: [.claude])
+        )
+        await store.refresh()
+
+        XCTAssertEqual(
+            store.menuBarReading(for: MenuBarItemID(provider: .claude, metric: .weekly))?.providerHighUsage,
+            true
+        )
     }
 
     func testRolledOverWindowStartsWithoutPreviousZone() async {
