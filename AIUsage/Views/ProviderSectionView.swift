@@ -494,12 +494,12 @@ private struct QuotaTile: View {
                             )
                     }
                     // Where the bar would be now to land on 100% at the reset:
-                    // a thin tick in the zone colour, taller than the bar. An
+                    // a thin tick in the bar's color, taller than the bar. An
                     // overlay, so its height never stretches the bar's layout.
                     .overlay(alignment: .leading) {
                         if let onPace {
                             Capsule()
-                                .fill(UsagePalette.zoneTint(window.pace?.zone))
+                                .fill(progressTint)
                                 .frame(width: 1.5, height: 12)
                                 .offset(x: geometry.size.width *
                                     displayMode.renderedFraction(from: onPace) - 0.75)
