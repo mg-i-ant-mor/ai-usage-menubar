@@ -87,3 +87,36 @@ creates `dist/v<version>/AI-Usage.dmg`, and updates the signed `appcast.xml`.
    now, after the DMG is downloadable.
 4. Check that the raw appcast and the DMG enclosure URL both return HTTP 200,
    then use Check for Updates in the installed app.
+
+## Build in CI
+
+The `Release` workflow (`.github/workflows/release.yml`) does "Build the DMG
+and appcast" on a GitHub runner with Xcode 27 (`xcode-27`, public preview).
+Prepare the version first and merge it into `develop`, then run it from
+`develop` with the version as input:
+
+```bash
+gh workflow run release.yml --ref develop -f version=0.5.0.4
+```
+
+The job waits for approval on the `release` Environment, which holds the
+`SPARKLE_PRIVATE_KEY` secret (the key exported as above). It leaves a draft
+release `v<version>` with the DMG and a `release/<version>` branch with the
+appcast. Then:
+
+1. Merge the appcast PR into `develop` (open it from the branch if the job
+   could not).
+2. Publish the draft release: it tags the current `develop` head, which is the
+   merge commit.
+3. Open the `develop` to `main` PR and merge it, then do the final check.
+
+One-time setup:
+
+```bash
+gh api -X PUT repos/mg-i-ant-mor/ai-usage-menubar/environments/release \
+  -F 'reviewers[][type]=User' -F 'reviewers[][id]=<your user id>' \
+  -F 'deployment_branch_policy[protected_branches]=false' \
+  -F 'deployment_branch_policy[custom_branch_policies]=true'
+gh api -X POST repos/mg-i-ant-mor/ai-usage-menubar/environments/release/deployment-branch-policies -f name=develop
+gh secret set SPARKLE_PRIVATE_KEY --env release < key
+```

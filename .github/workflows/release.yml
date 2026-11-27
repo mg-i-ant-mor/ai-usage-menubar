@@ -1,0 +1,79 @@
+name: Release
+
+# Costruisce il DMG di una versione gia' preparata su develop (bump in
+# project.pbxproj e docs/releases/<versione>.md), firma l'appcast con la chiave
+# Sparkle e lascia pronti: una bozza di release con il DMG e una branch con
+# l'appcast. Il merge, la pubblicazione della bozza e il merge su main (che
+# mette online il feed) restano a mano. Passi completi in docs/releasing.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versione del fork, per esempio 0.5.0.4"
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency: release
+
+jobs:
+  package:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: xcode-27
+    # L'Environment custodisce SPARKLE_PRIVATE_KEY e richiede l'approvazione.
+    environment: release
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      VERSION: ${{ inputs.version }}
+      SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Controlla la versione
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Versione non valida: $VERSION"; exit 1; }
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
+            echo "Il tag v$VERSION esiste gia'"; exit 1
+          fi
+
+      - name: Usa Xcode 27.2
+        run: sudo xcode-select -s /Applications/Xcode_27.2.app
+
+      - name: Importa la chiave Sparkle
+        run: |
+          echo "SPARKLE_PRIVATE_KEY_FILE=$RUNNER_TEMP/sparkle.key" >> "$GITHUB_ENV"
+          export SPARKLE_PRIVATE_KEY_FILE="$RUNNER_TEMP/sparkle.key"
+          # Lo script confronta la chiave pubblica con quella nel Portachiavi.
+          xcodebuild -resolvePackageDependencies -project AIUsage.xcodeproj \
+            -scheme AIUsage -derivedDataPath DerivedData-Release
+          (umask 077; printf '%s' "$SPARKLE_PRIVATE_KEY" > "$SPARKLE_PRIVATE_KEY_FILE")
+          DerivedData-Release/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_keys \
+            --account ai-usage-menubar-mg -f "$SPARKLE_PRIVATE_KEY_FILE"
+
+      - name: Costruisci DMG e appcast
+        run: ./scripts/package_release.sh "$VERSION"
+
+      - name: Bozza di release con il DMG
+        run: |
+          gh release create "v$VERSION" --draft --target develop \
+            --title "AI Usage $VERSION" --notes-file "docs/releases/$VERSION.md" \
+            "dist/v$VERSION/AI-Usage.dmg" "dist/v$VERSION/AI-Usage.dmg.sha256"
+
+      - name: Branch con l'appcast
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "release/$VERSION"
+          git commit -m "Publish AI Usage $VERSION in the appcast" appcast.xml
+          git push origin "release/$VERSION"
+          gh pr create --base develop --head "release/$VERSION" \
+            --title "Publish AI Usage $VERSION in the appcast" \
+            --body "Appcast firmato per $VERSION. Il feed va online solo quando develop arriva su main, dopo la pubblicazione della release v$VERSION." \
+            || echo "::warning::PR non creata: apri release/$VERSION verso develop a mano."
+
+      - name: Rimuovi la chiave
+        if: always()
+        run: rm -f "$SPARKLE_PRIVATE_KEY_FILE"
