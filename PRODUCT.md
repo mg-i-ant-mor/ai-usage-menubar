@@ -77,8 +77,8 @@ database, or background transcript scanning.
   neither slow the pace nor count as time left.
 - A quota window with a known start and reset shows an on-pace mark on its
   bar: the share of the window that has passed, which is where usage would be
-  to reach 100% exactly at the reset. The mark takes the pace zone's color:
-  teal on track, orange ahead, red far ahead. Windows of a day or less use
+  to reach 100% exactly at the reset. The mark takes the bar's color.
+  Windows of a day or less use
   calendar time; longer windows use working time when the working-hours
   setting is on. VoiceOver reads it in the tile's Left or Used mode.
 - Orange from 60% used and red from 85% fade toward the normal color as
