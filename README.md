@@ -51,8 +51,8 @@ features below and ships its own releases and update feed.
   **Working hours only** to measure weekly and monthly limits in your working
   days and hours, so nights and weekends don't skew the pace.
 - **On-pace mark and daily budget.** A thin mark on each bar shows where usage
-  would be now to reach the limit exactly at its reset, and takes the color of
-  how far ahead you are. Orange and red usage colors fade while you're under
+  would be now to reach the limit exactly at its reset, in the bar's color.
+  Orange and red usage colors fade while you're under
   pace. Limits that last a day or more show how much you can use each day until
   they reset, as in `6.1%/day · Reset 1d 23h`.
 - **More than one Claude account.** Each account is identified by its keychain
@@ -126,8 +126,7 @@ time.
   measure weekly and monthly limits in your working days and hours, so nights
   and weekends don't skew the pace.
 - A thin mark on each bar shows where usage would be now to reach the limit
-  exactly at its reset. Past the mark you're ahead of pace, and the mark turns
-  orange when ahead and red when far ahead. Sessions always measure it in clock
+  exactly at its reset. Past the mark you're ahead of pace. Sessions always measure it in clock
   time; with **Working hours only**, weekly and monthly limits measure it in
   your working time.
 - Orange (from 60%) and red (from 85%) usage colors fade toward the normal
